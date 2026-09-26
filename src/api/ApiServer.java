@@ -12,11 +12,12 @@ public class ApiServer {
 
     /*
      * Local:
-     *   http://localhost:8080
+     * http://localhost:8080
      *
      * Deployment:
-     *   Hosting platform provides PORT automatically.
+     * Hosting platform provides PORT automatically.
      */
+
     private static final int PORT =
             Integer.parseInt(
                     System.getenv().getOrDefault(
@@ -61,12 +62,13 @@ public class ApiServer {
             // =================================================
 
             /*
-             * Example:
+             * Examples:
              *
              * GET /api/events/1/seats
              * GET /api/events/2/seats
              * GET /api/events/3/seats
              */
+
             server.createContext(
                     "/api/events/",
                     new SeatHandler()
@@ -96,9 +98,8 @@ public class ApiServer {
 
             /*
              * POST /api/bookings
-             *
-             * This was missing from your ApiServer.
              */
+
             server.createContext(
                     "/api/bookings",
                     new BookingHandler()
@@ -128,10 +129,16 @@ public class ApiServer {
 
             System.out.println("Available APIs:");
 
-            System.out.println("GET  /");
-            System.out.println("GET  /api/events");
             System.out.println(
-                    "GET  /api/events/{id}/seats"
+                    "GET /"
+            );
+
+            System.out.println(
+                    "GET /api/events"
+            );
+
+            System.out.println(
+                    "GET /api/events/{id}/seats"
             );
 
             System.out.println(
@@ -147,6 +154,7 @@ public class ApiServer {
             );
 
             System.out.println("--------------------------------");
+
             System.out.println(
                     "Backend is running."
             );
@@ -156,6 +164,7 @@ public class ApiServer {
             );
 
             // Keep server alive
+
             CountDownLatch latch =
                     new CountDownLatch(1);
 
@@ -190,6 +199,7 @@ public class ApiServer {
         addCorsHeaders(exchange);
 
         // OPTIONS
+
         if ("OPTIONS".equalsIgnoreCase(
                 exchange.getRequestMethod()
         )) {
@@ -205,6 +215,7 @@ public class ApiServer {
         }
 
         // GET only
+
         if (!"GET".equalsIgnoreCase(
                 exchange.getRequestMethod()
         )) {
@@ -294,3 +305,4 @@ public class ApiServer {
                 .close();
     }
 }
+
