@@ -6,8 +6,9 @@ function Login({ onLogin, onRegister, onBack }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
 
     setError("");
@@ -19,37 +20,57 @@ function Login({ onLogin, onRegister, onBack }) {
       return;
     }
 
-    const savedUser = localStorage.getItem(
-      "eventhubRegisteredUser"
-    );
+    setLoading(true);
 
-    if (!savedUser) {
-      setError("Account not found. Please create an account first.");
-      return;
-    }
+    try {
+      const response = await fetch(
+        "http://localhost:8080/api/login",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email: cleanEmail,
+            password: password,
+          }),
+        }
+      );
 
-    const user = JSON.parse(savedUser);
+      const data = await response.json();
 
-    if (
-      user.email !== cleanEmail ||
-      user.password !== password
-    ) {
-      setError("Incorrect email or password.");
-      return;
-    }
+      if (!response.ok || data.status !== "success") {
+        setError(
+          data.message || "Invalid email or password."
+        );
+        return;
+      }
 
-    const loggedUser = {
-      name: user.name,
-      email: user.email,
-    };
+      const loggedUser = {
+        id: data.user.id,
+        name: data.user.name,
+        email: data.user.email,
+        role: data.user.role,
+      };
 
-    localStorage.setItem(
-      "eventhubUser",
-      JSON.stringify(loggedUser)
-    );
+      localStorage.setItem(
+        "eventhubUser",
+        JSON.stringify(loggedUser)
+      );
 
-    if (onLogin) {
-      onLogin(loggedUser);
+      if (onLogin) {
+        onLogin(loggedUser);
+      }
+
+    } catch (error) {
+      console.error("Login API error:", error);
+
+      setError(
+        "Unable to connect to EventHub server. Please make sure the Java backend is running."
+      );
+
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -140,6 +161,7 @@ function Login({ onLogin, onRegister, onBack }) {
                 onChange={(e) =>
                   setEmail(e.target.value)
                 }
+                disabled={loading}
               />
 
             </div>
@@ -158,6 +180,7 @@ function Login({ onLogin, onRegister, onBack }) {
                 onChange={(e) =>
                   setPassword(e.target.value)
                 }
+                disabled={loading}
               />
 
             </div>
@@ -173,9 +196,10 @@ function Login({ onLogin, onRegister, onBack }) {
             <button
               type="submit"
               className="login-submit"
+              disabled={loading}
             >
               <span>
-                SIGN IN
+                {loading ? "SIGNING IN..." : "SIGN IN"}
               </span>
 
               <strong>
@@ -197,6 +221,7 @@ function Login({ onLogin, onRegister, onBack }) {
             type="button"
             className="create-account-button"
             onClick={handleCreateAccount}
+            disabled={loading}
           >
             <span>
               CREATE ACCOUNT

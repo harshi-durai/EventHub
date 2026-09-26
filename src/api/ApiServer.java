@@ -11,8 +11,8 @@ import java.util.concurrent.CountDownLatch;
 public class ApiServer {
 
     /*
-     * Local development:
-     *   PORT = 8080
+     * Local:
+     *   http://localhost:8080
      *
      * Deployment:
      *   Hosting platform provides PORT automatically.
@@ -29,17 +29,14 @@ public class ApiServer {
 
         try {
 
-            /*
-             * 0.0.0.0 allows the server to accept
-             * connections from outside the local machine.
-             */
-            HttpServer server = HttpServer.create(
-                    new InetSocketAddress(
-                            "0.0.0.0",
-                            PORT
-                    ),
-                    0
-            );
+            HttpServer server =
+                    HttpServer.create(
+                            new InetSocketAddress(
+                                    "0.0.0.0",
+                                    PORT
+                            ),
+                            0
+                    );
 
             // =================================================
             // HEALTH CHECK
@@ -51,7 +48,7 @@ public class ApiServer {
             );
 
             // =================================================
-            // EVENTS API
+            // EVENTS
             // =================================================
 
             server.createContext(
@@ -60,7 +57,7 @@ public class ApiServer {
             );
 
             // =================================================
-            // SEATS API
+            // SEATS
             // =================================================
 
             /*
@@ -68,6 +65,7 @@ public class ApiServer {
              *
              * GET /api/events/1/seats
              * GET /api/events/2/seats
+             * GET /api/events/3/seats
              */
             server.createContext(
                     "/api/events/",
@@ -75,7 +73,7 @@ public class ApiServer {
             );
 
             // =================================================
-            // REGISTER API
+            // REGISTER
             // =================================================
 
             server.createContext(
@@ -84,7 +82,7 @@ public class ApiServer {
             );
 
             // =================================================
-            // LOGIN API
+            // LOGIN
             // =================================================
 
             server.createContext(
@@ -92,9 +90,24 @@ public class ApiServer {
                     new UserHandler()
             );
 
+            // =================================================
+            // BOOKINGS
+            // =================================================
+
             /*
-             * Use the default executor.
+             * POST /api/bookings
+             *
+             * This was missing from your ApiServer.
              */
+            server.createContext(
+                    "/api/bookings",
+                    new BookingHandler()
+            );
+
+            // =================================================
+            // EXECUTOR
+            // =================================================
+
             server.setExecutor(null);
 
             // =================================================
@@ -108,21 +121,32 @@ public class ApiServer {
             System.out.println("--------------------------------");
 
             System.out.println(
-                    "Server running on port: "
-                            + PORT
+                    "Server running on port: " + PORT
             );
 
             System.out.println();
 
             System.out.println("Available APIs:");
+
             System.out.println("GET  /");
             System.out.println("GET  /api/events");
-            System.out.println("GET  /api/events/{id}/seats");
-            System.out.println("POST /api/register");
-            System.out.println("POST /api/login");
+            System.out.println(
+                    "GET  /api/events/{id}/seats"
+            );
+
+            System.out.println(
+                    "POST /api/register"
+            );
+
+            System.out.println(
+                    "POST /api/login"
+            );
+
+            System.out.println(
+                    "POST /api/bookings"
+            );
 
             System.out.println("--------------------------------");
-
             System.out.println(
                     "Backend is running."
             );
@@ -131,9 +155,7 @@ public class ApiServer {
                     "Press Ctrl+C to stop."
             );
 
-            /*
-             * Keep the application alive.
-             */
+            // Keep server alive
             CountDownLatch latch =
                     new CountDownLatch(1);
 
@@ -158,16 +180,19 @@ public class ApiServer {
     }
 
     // =========================================================
-    // HEALTH CHECK HANDLER
+    // HEALTH CHECK
     // =========================================================
 
     private static void handleHealth(
-            HttpExchange exchange) throws IOException {
+            HttpExchange exchange
+    ) throws IOException {
 
         addCorsHeaders(exchange);
 
+        // OPTIONS
         if ("OPTIONS".equalsIgnoreCase(
-                exchange.getRequestMethod())) {
+                exchange.getRequestMethod()
+        )) {
 
             exchange.sendResponseHeaders(
                     204,
@@ -179,8 +204,10 @@ public class ApiServer {
             return;
         }
 
+        // GET only
         if (!"GET".equalsIgnoreCase(
-                exchange.getRequestMethod())) {
+                exchange.getRequestMethod()
+        )) {
 
             sendResponse(
                     exchange,
@@ -196,7 +223,8 @@ public class ApiServer {
             return;
         }
 
-        String response = """
+        String response =
+                """
                 {
                   "status": "online",
                   "message": "EventHub Java Backend is running"
@@ -211,11 +239,12 @@ public class ApiServer {
     }
 
     // =========================================================
-    // CORS HEADERS
+    // CORS
     // =========================================================
 
     private static void addCorsHeaders(
-            HttpExchange exchange) {
+            HttpExchange exchange
+    ) {
 
         exchange.getResponseHeaders().set(
                 "Access-Control-Allow-Origin",

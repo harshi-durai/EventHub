@@ -16,28 +16,44 @@ public class SeatHandler implements HttpHandler {
     private final SeatDAO seatDAO = new SeatDAO();
 
     @Override
-    public void handle(HttpExchange exchange) throws IOException {
+    public void handle(HttpExchange exchange)
+            throws IOException {
 
         addCorsHeaders(exchange);
 
-        // Handle browser preflight request
-        if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
+        // =====================================================
+        // OPTIONS
+        // =====================================================
 
-            exchange.sendResponseHeaders(204, -1);
+        if ("OPTIONS".equalsIgnoreCase(
+                exchange.getRequestMethod()
+        )) {
+
+            exchange.sendResponseHeaders(
+                    204,
+                    -1
+            );
+
             exchange.close();
+
             return;
         }
 
-        // Only GET is allowed
-        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+        // =====================================================
+        // GET ONLY
+        // =====================================================
+
+        if (!"GET".equalsIgnoreCase(
+                exchange.getRequestMethod()
+        )) {
 
             sendResponse(
                     exchange,
                     405,
                     """
                     {
-                      "status": "error",
-                      "message": "Method not allowed"
+                      "status":"error",
+                      "message":"GET method required"
                     }
                     """
             );
@@ -48,44 +64,53 @@ public class SeatHandler implements HttpHandler {
         try {
 
             String path =
-                    exchange.getRequestURI().getPath();
+                    exchange.getRequestURI()
+                            .getPath();
 
-            /*
-             * Expected:
-             *
-             * /api/events/1/seats
-             *
-             * /api/events/2/seats
-             */
+            System.out.println();
+            System.out.println(
+                    "Seat API request: " + path
+            );
+
+            // =================================================
+            // EXPECTED:
+            //
+            // /api/events/3/seats
+            // =================================================
 
             String[] parts =
                     path.split("/");
 
             /*
-             * parts:
-             *
-             * [0] = ""
-             * [1] = "api"
-             * [2] = "events"
-             * [3] = eventId
-             * [4] = "seats"
+             * parts[0] = ""
+             * parts[1] = "api"
+             * parts[2] = "events"
+             * parts[3] = event ID
+             * parts[4] = "seats"
              */
 
-            if (parts.length < 5) {
+            if (parts.length != 5
+                    || !"api".equals(parts[1])
+                    || !"events".equals(parts[2])
+                    || !"seats".equalsIgnoreCase(parts[4])) {
 
                 sendResponse(
                         exchange,
                         400,
                         """
                         {
-                          "status": "error",
-                          "message": "Invalid event seat URL"
+                          "status":"error",
+                          "message":"Invalid seat API URL"
                         }
                         """
                 );
 
                 return;
             }
+
+            // =================================================
+            // EVENT ID
+            // =================================================
 
             int eventId;
 
@@ -101,8 +126,8 @@ public class SeatHandler implements HttpHandler {
                         400,
                         """
                         {
-                          "status": "error",
-                          "message": "Invalid event ID"
+                          "status":"error",
+                          "message":"Invalid event ID"
                         }
                         """
                 );
@@ -110,8 +135,32 @@ public class SeatHandler implements HttpHandler {
                 return;
             }
 
+            if (eventId <= 0) {
+
+                sendResponse(
+                        exchange,
+                        400,
+                        """
+                        {
+                          "status":"error",
+                          "message":"Event ID must be greater than zero"
+                        }
+                        """
+                );
+
+                return;
+            }
+
+            // =================================================
+            // LOAD SEATS
+            // =================================================
+
             List<Seat> seats =
                     seatDAO.getSeatsByEvent(eventId);
+
+            // =================================================
+            // BUILD JSON
+            // =================================================
 
             StringBuilder json =
                     new StringBuilder();
@@ -125,29 +174,33 @@ public class SeatHandler implements HttpHandler {
                 Seat seat =
                         seats.get(i);
 
-                json.append("{")
+                json.append("{");
 
-                        .append("\"id\":")
+                json.append("\"id\":")
                         .append(seat.getId())
-                        .append(",")
+                        .append(",");
 
-                        .append("\"eventId\":")
+                json.append("\"eventId\":")
                         .append(seat.getEventId())
-                        .append(",")
+                        .append(",");
 
-                        .append("\"seatNumber\":\"")
-                        .append(escape(
-                                seat.getSeatNumber()
-                        ))
-                        .append("\",")
+                json.append("\"seatNumber\":\"")
+                        .append(
+                                escape(
+                                        seat.getSeatNumber()
+                                )
+                        )
+                        .append("\",");
 
-                        .append("\"status\":\"")
-                        .append(escape(
-                                seat.getStatus()
-                        ))
-                        .append("\"")
+                json.append("\"status\":\"")
+                        .append(
+                                escape(
+                                        seat.getStatus()
+                                )
+                        )
+                        .append("\"");
 
-                        .append("}");
+                json.append("}");
 
                 if (i < seats.size() - 1) {
                     json.append(",");
@@ -155,6 +208,11 @@ public class SeatHandler implements HttpHandler {
             }
 
             json.append("]");
+
+            System.out.println(
+                    "Seats returned: "
+                            + seats.size()
+            );
 
             sendResponse(
                     exchange,
@@ -164,6 +222,10 @@ public class SeatHandler implements HttpHandler {
 
         } catch (Exception e) {
 
+            System.out.println(
+                    "Seat API failed!"
+            );
+
             e.printStackTrace();
 
             sendResponse(
@@ -171,13 +233,17 @@ public class SeatHandler implements HttpHandler {
                     500,
                     """
                     {
-                      "status": "error",
-                      "message": "Failed to load seats"
+                      "status":"error",
+                      "message":"Failed to load seats from database"
                     }
                     """
             );
         }
     }
+
+    // =========================================================
+    // CORS
+    // =========================================================
 
     private void addCorsHeaders(
             HttpExchange exchange
@@ -204,6 +270,10 @@ public class SeatHandler implements HttpHandler {
         );
     }
 
+    // =========================================================
+    // SEND RESPONSE
+    // =========================================================
+
     private void sendResponse(
             HttpExchange exchange,
             int statusCode,
@@ -227,6 +297,10 @@ public class SeatHandler implements HttpHandler {
                 .close();
     }
 
+    // =========================================================
+    // JSON ESCAPE
+    // =========================================================
+
     private String escape(
             String value
     ) {
@@ -242,4 +316,3 @@ public class SeatHandler implements HttpHandler {
                 .replace("\r", "\\r");
     }
 }
-

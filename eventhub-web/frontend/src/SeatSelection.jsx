@@ -1,6 +1,8 @@
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import "./SeatSelection.css";
+
+const API_BASE_URL = "http://localhost:8080";
 
 const ROWS = ["A", "B", "C", "D", "E", "F", "G", "H"];
 const SEATS_PER_ROW = 10;
@@ -11,72 +13,197 @@ function SeatSelection({
   confirmBooking,
   onNavigate,
 }) {
-  const [selected, setSelected] = useState(
-    selectedSeats || []
-  );
+  const [selected, setSelected] = useState(selectedSeats || []);
 
-  /* ================= PRICE ================= */
+  // Backend seat data
+  const [backendSeats, setBackendSeats] = useState([]);
+
+  const [loadingSeats, setLoadingSeats] = useState(true);
+  const [seatError, setSeatError] = useState("");
+
+  /* =====================================================
+     PRICE
+  ===================================================== */
 
   const ticketPrice = Number(
-    selectedEvent?.price || 150
+    selectedEvent?.ticketPrice ??
+      selectedEvent?.price ??
+      150
   );
 
-  /* ================= BOOKED SEATS ================= */
+  /* =====================================================
+     EVENT ID
+  ===================================================== */
+
+  const eventId =
+    selectedEvent?.id ??
+    selectedEvent?.eventId ??
+    null;
+
+  /* =====================================================
+     LOAD SEATS FROM JAVA BACKEND
+  ===================================================== */
+
+  useEffect(() => {
+    if (!eventId) {
+      setBackendSeats([]);
+      setLoadingSeats(false);
+      return;
+    }
+
+    const loadSeats = async () => {
+      try {
+        setLoadingSeats(true);
+        setSeatError("");
+
+        console.log(
+          `Loading seats for event ${eventId}...`
+        );
+
+        const response = await fetch(
+          `${API_BASE_URL}/api/events/${eventId}/seats`
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            `Backend returned ${response.status}`
+          );
+        }
+
+        const data = await response.json();
+
+        console.log("Backend seats:", data);
+
+        setBackendSeats(data);
+
+      } catch (error) {
+        console.error(
+          "Failed to load seats:",
+          error
+        );
+
+        setSeatError(
+          "Unable to load seats from EventHub backend."
+        );
+
+        setBackendSeats([]);
+
+      } finally {
+        setLoadingSeats(false);
+      }
+    };
+
+    loadSeats();
+  }, [eventId]);
+
+  /* =====================================================
+     BOOKED SEATS
+  ===================================================== */
 
   const bookedSeats = useMemo(() => {
-    const stored =
-      JSON.parse(
-        localStorage.getItem("eventhubBookings")
-      ) || [];
+    return backendSeats
+      .filter(
+        (seat) =>
+          String(seat.status).toUpperCase() ===
+          "BOOKED"
+      )
+      .map((seat) => seat.seatNumber);
+  }, [backendSeats]);
 
-    const booked = [];
+  /* =====================================================
+     AVAILABLE SEATS
+  ===================================================== */
 
-    stored.forEach((booking) => {
-      if (
-        selectedEvent &&
-        booking.event?.id === selectedEvent.id
-      ) {
-        booked.push(...(booking.seats || []));
-      }
-    });
+  const availableSeats = useMemo(() => {
+    return backendSeats
+      .filter(
+        (seat) =>
+          String(seat.status).toUpperCase() ===
+          "AVAILABLE"
+      )
+      .map((seat) => seat.seatNumber);
+  }, [backendSeats]);
 
-    return booked;
-  }, [selectedEvent]);
-
-  /* ================= SEAT TOGGLE ================= */
+  /* =====================================================
+     SEAT TOGGLE
+  ===================================================== */
 
   const toggleSeat = (seatId) => {
+    // Don't allow backend-booked seats
     if (bookedSeats.includes(seatId)) {
+      return;
+    }
+
+    // Don't allow seats that backend doesn't know
+    if (
+      backendSeats.length > 0 &&
+      !availableSeats.includes(seatId)
+    ) {
       return;
     }
 
     if (selected.includes(seatId)) {
       setSelected(
-        selected.filter((seat) => seat !== seatId)
+        selected.filter(
+          (seat) => seat !== seatId
+        )
       );
-    } else {
-      if (selected.length >= 8) {
-        return;
-      }
 
-      setSelected([
-        ...selected,
-        seatId,
-      ]);
+      return;
     }
+
+    // Maximum 8 seats
+    if (selected.length >= 8) {
+      alert(
+        "You can select a maximum of 8 seats."
+      );
+      return;
+    }
+
+    setSelected([
+      ...selected,
+      seatId,
+    ]);
   };
 
-  /* ================= CONFIRM ================= */
+  /* =====================================================
+     CONFIRM BOOKING
+  ===================================================== */
 
   const handleBookNow = () => {
     if (!selectedEvent) {
+      alert("Please select an event.");
       return;
     }
 
     if (selected.length === 0) {
-      alert("Please select at least one seat.");
+      alert(
+        "Please select at least one seat."
+      );
       return;
     }
+
+    // Final check against backend data
+    const unavailableSelected =
+      selected.filter(
+        (seat) =>
+          bookedSeats.includes(seat)
+      );
+
+    if (unavailableSelected.length > 0) {
+      alert(
+        `These seats are already booked: ${unavailableSelected.join(
+          ", "
+        )}`
+      );
+
+      return;
+    }
+
+    console.log(
+      "Selected seats:",
+      selected
+    );
 
     if (confirmBooking) {
       confirmBooking(
@@ -86,21 +213,50 @@ function SeatSelection({
     }
   };
 
-  /* ================= TOTAL ================= */
+  /* =====================================================
+     TOTAL
+  ===================================================== */
 
   const totalAmount =
     selected.length * ticketPrice;
 
+  /* =====================================================
+     EVENT DISPLAY DATA
+  ===================================================== */
+
+  const eventTitle =
+    selectedEvent?.title ||
+    selectedEvent?.name ||
+    "Select Your Seats";
+
+  const eventDate =
+    selectedEvent?.date ||
+    selectedEvent?.eventDate ||
+    "Event Date";
+
+  const eventLocation =
+    selectedEvent?.location ||
+    selectedEvent?.venue ||
+    "Event Location";
+
+  /* =====================================================
+     RENDER
+  ===================================================== */
+
   return (
     <div className="seat-page">
 
-      {/* ================= HEADER ================= */}
+      {/* =================================================
+          HEADER
+      ================================================= */}
 
       <header className="seat-header">
 
         <button
           className="seat-brand"
-          onClick={() => onNavigate("home")}
+          onClick={() =>
+            onNavigate("home")
+          }
           type="button"
         >
           EVENT<span>HUB</span>
@@ -125,11 +281,15 @@ function SeatSelection({
       </header>
 
 
-      {/* ================= MAIN ================= */}
+      {/* =================================================
+          MAIN
+      ================================================= */}
 
       <main className="seat-main">
 
-        {/* EVENT INFO */}
+        {/* =================================================
+            EVENT INFORMATION
+        ================================================= */}
 
         <section className="seat-event-info">
 
@@ -140,16 +300,13 @@ function SeatSelection({
             </span>
 
             <h1>
-              {selectedEvent?.title ||
-                "Select Your Seats"}
+              {eventTitle}
             </h1>
 
             <p>
-              {selectedEvent?.date ||
-                "Event Date"}
+              {eventDate}
               {"  •  "}
-              {selectedEvent?.location ||
-                "Event Location"}
+              {eventLocation}
             </p>
 
           </div>
@@ -169,143 +326,231 @@ function SeatSelection({
         </section>
 
 
-        {/* ================= SEAT AREA ================= */}
+        {/* =================================================
+            ERROR
+        ================================================= */}
 
-        <section className="seat-layout">
+        {seatError && (
+          <div className="seat-error">
+            {seatError}
 
-          {/* SCREEN */}
+            <br />
 
-          <div className="screen-area">
+            <small>
+              Make sure the Java backend is running
+              on port 8080.
+            </small>
+          </div>
+        )}
 
-            <div className="screen">
-              SCREEN
-            </div>
+
+        {/* =================================================
+            LOADING
+        ================================================= */}
+
+        {loadingSeats ? (
+
+          <section className="seat-loading">
+
+            <div className="loading-spinner"></div>
+
+            <h3>
+              LOADING SEATS
+            </h3>
 
             <p>
-              All eyes this way
+              Connecting to EventHub backend...
             </p>
 
-          </div>
+          </section>
+
+        ) : (
+
+          /* =================================================
+             SEAT AREA
+          ================================================= */
+
+          <section className="seat-layout">
+
+            {/* SCREEN */}
+
+            <div className="screen-area">
+
+              <div className="screen">
+                SCREEN
+              </div>
+
+              <p>
+                All eyes this way
+              </p>
+
+            </div>
 
 
-          {/* SEAT MAP */}
+            {/* =================================================
+                SEAT MAP
+            ================================================= */}
 
-          <div className="seat-map">
+            <div className="seat-map">
 
-            {ROWS.map((row) => (
+              {ROWS.map((row) => (
 
-              <div
-                className="seat-row"
-                key={row}
-              >
+                <div
+                  className="seat-row"
+                  key={row}
+                >
 
-                <span className="row-label">
-                  {row}
-                </span>
+                  <span className="row-label">
+                    {row}
+                  </span>
 
 
-                <div className="seat-row-inner">
+                  <div className="seat-row-inner">
 
-                  {Array.from(
-                    {
-                      length: SEATS_PER_ROW,
-                    },
-                    (_, index) => {
+                    {Array.from(
+                      {
+                        length:
+                          SEATS_PER_ROW,
+                      },
+                      (_, index) => {
 
-                      const seatNumber =
-                        index + 1;
+                        const seatNumber =
+                          index + 1;
 
-                      const seatId =
-                        `${row}${seatNumber}`;
+                        const seatId =
+                          `${row}${seatNumber}`;
 
-                      const isSelected =
-                        selected.includes(
-                          seatId
-                        );
+                        const backendSeat =
+                          backendSeats.find(
+                            (seat) =>
+                              seat.seatNumber ===
+                              seatId
+                          );
 
-                      const isBooked =
-                        bookedSeats.includes(
-                          seatId
-                        );
+                        const isSelected =
+                          selected.includes(
+                            seatId
+                          );
 
-                      return (
-                        <React.Fragment
-                          key={seatId}
-                        >
+                        const isBooked =
+                          bookedSeats.includes(
+                            seatId
+                          );
 
-                          {seatNumber === 6 && (
-                            <div className="seat-gap" />
-                          )}
+                        const isAvailable =
+                          availableSeats.includes(
+                            seatId
+                          );
 
-                          <button
-                            type="button"
-                            className={[
-                              "seat",
-                              isSelected
-                                ? "selected"
-                                : "",
-                              isBooked
-                                ? "booked"
-                                : "",
-                            ].join(" ")}
-                            disabled={isBooked}
-                            onClick={() =>
-                              toggleSeat(
-                                seatId
-                              )
-                            }
-                            title={
-                              isBooked
-                                ? "Already booked"
-                                : `Seat ${seatId}`
-                            }
+                        return (
+                          <React.Fragment
+                            key={seatId}
                           >
-                            {seatNumber}
-                          </button>
 
-                        </React.Fragment>
-                      );
-                    }
-                  )}
+                            {seatNumber === 6 && (
+                              <div className="seat-gap" />
+                            )}
+
+                            <button
+                              type="button"
+                              className={[
+                                "seat",
+
+                                isSelected
+                                  ? "selected"
+                                  : "",
+
+                                isBooked
+                                  ? "booked"
+                                  : "",
+
+                                !isBooked &&
+                                !isAvailable &&
+                                backendSeats.length > 0
+                                  ? "unavailable"
+                                  : "",
+                              ]
+                                .join(" ")
+                                .trim()}
+
+                              disabled={
+                                isBooked ||
+                                (
+                                  backendSeats.length >
+                                    0 &&
+                                  !isAvailable
+                                )
+                              }
+
+                              onClick={() =>
+                                toggleSeat(
+                                  seatId
+                                )
+                              }
+
+                              title={
+                                isBooked
+                                  ? `Seat ${seatId} is already booked`
+                                  : isAvailable
+                                  ? `Seat ${seatId} available`
+                                  : backendSeat
+                                  ? `Seat ${seatId} unavailable`
+                                  : `Seat ${seatId}`
+                              }
+                            >
+                              {seatNumber}
+                            </button>
+
+                          </React.Fragment>
+                        );
+                      }
+                    )}
+
+                  </div>
+
+
+                  <span className="row-label">
+                    {row}
+                  </span>
 
                 </div>
 
-                <span className="row-label">
-                  {row}
-                </span>
+              ))}
 
+            </div>
+
+
+            {/* =================================================
+                LEGEND
+            ================================================= */}
+
+            <div className="seat-legend">
+
+              <div>
+                <span className="legend-seat available"></span>
+                AVAILABLE
               </div>
 
-            ))}
+              <div>
+                <span className="legend-seat selected"></span>
+                SELECTED
+              </div>
 
-          </div>
+              <div>
+                <span className="legend-seat booked"></span>
+                BOOKED
+              </div>
 
-
-          {/* LEGEND */}
-
-          <div className="seat-legend">
-
-            <div>
-              <span className="legend-seat available"></span>
-              AVAILABLE
             </div>
 
-            <div>
-              <span className="legend-seat selected"></span>
-              SELECTED
-            </div>
+          </section>
 
-            <div>
-              <span className="legend-seat booked"></span>
-              BOOKED
-            </div>
-
-          </div>
-
-        </section>
+        )}
 
 
-        {/* ================= SUMMARY ================= */}
+        {/* =================================================
+            BOOKING SUMMARY
+        ================================================= */}
 
         <section className="booking-summary">
 
@@ -325,7 +570,7 @@ function SeatSelection({
 
               ) : (
 
-                selected
+                [...selected]
                   .sort((a, b) =>
                     a.localeCompare(
                       b,
@@ -370,6 +615,10 @@ function SeatSelection({
             className="book-now-button"
             onClick={handleBookNow}
             type="button"
+            disabled={
+              loadingSeats ||
+              selected.length === 0
+            }
           >
             BOOK NOW
             <span>→</span>
