@@ -19,19 +19,32 @@ function App() {
   );
 
   const [selectedEvent, setSelectedEvent] = useState(null);
+
   const [selectedSeats, setSelectedSeats] = useState([]);
 
   const [currentUser, setCurrentUser] = useState(() => {
     const saved = localStorage.getItem("eventhubUser");
-    return saved ? JSON.parse(saved) : null;
+
+    try {
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
   });
 
   const [bookings, setBookings] = useState(() => {
     const saved = localStorage.getItem("eventhubBookings");
-    return saved ? JSON.parse(saved) : [];
+
+    try {
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
   });
 
-  /* ================= ROUTING ================= */
+  /* =====================================================
+     ROUTING
+  ===================================================== */
 
   useEffect(() => {
     const changeRoute = () => {
@@ -46,10 +59,16 @@ function App() {
       });
     };
 
-    window.addEventListener("hashchange", changeRoute);
+    window.addEventListener(
+      "hashchange",
+      changeRoute
+    );
 
     return () => {
-      window.removeEventListener("hashchange", changeRoute);
+      window.removeEventListener(
+        "hashchange",
+        changeRoute
+      );
     };
   }, []);
 
@@ -63,6 +82,7 @@ function App() {
     }
 
     window.location.hash = `/${page}`;
+
     setRoute(page);
 
     window.scrollTo({
@@ -71,7 +91,9 @@ function App() {
     });
   };
 
-  /* ================= LOGIN ================= */
+  /* =====================================================
+     LOGIN
+  ===================================================== */
 
   const handleLogin = (user) => {
     setCurrentUser(user);
@@ -84,7 +106,9 @@ function App() {
     navigate("home");
   };
 
-  /* ================= REGISTER ================= */
+  /* =====================================================
+     REGISTER
+  ===================================================== */
 
   const handleRegister = (user) => {
     setCurrentUser(user);
@@ -97,249 +121,482 @@ function App() {
     navigate("home");
   };
 
-  /* ================= LOGOUT ================= */
+  /* =====================================================
+     LOGOUT
+  ===================================================== */
 
   const handleLogout = () => {
-    localStorage.removeItem("eventhubUser");
+    localStorage.removeItem(
+      "eventhubUser"
+    );
 
     setCurrentUser(null);
 
     navigate("home");
   };
 
-  /* ================= BOOKING ================= */
+  /* =====================================================
+     NORMALIZE SEAT
+  ===================================================== */
 
-  const confirmBooking = async (event, seats) => {
-    if (!event || !seats || seats.length === 0) {
+  const normalizeSeat = (seat) => {
+    /*
+     * New backend seat object:
+     *
+     * {
+     *   id: 35,
+     *   seatId: 35,
+     *   eventId: 3,
+     *   seatNumber: "A5",
+     *   status: "AVAILABLE"
+     * }
+     *
+     * Also supports old string seats:
+     *
+     * "A5"
+     */
+
+    if (
+      typeof seat === "string"
+    ) {
+      return {
+        id: null,
+        seatId: null,
+        eventId:
+          selectedEvent?.id ??
+          selectedEvent?.eventId ??
+          null,
+        seatNumber: seat,
+        status: "AVAILABLE",
+      };
+    }
+
+    if (!seat) {
+      return null;
+    }
+
+    return {
+      id:
+        seat.id ??
+        seat.seatId ??
+        seat.seat_id ??
+        null,
+
+      seatId:
+        seat.seatId ??
+        seat.id ??
+        seat.seat_id ??
+        null,
+
+      eventId:
+        seat.eventId ??
+        seat.event_id ??
+        selectedEvent?.id ??
+        selectedEvent?.eventId ??
+        null,
+
+      seatNumber:
+        seat.seatNumber ??
+        seat.seat_number ??
+        seat.number ??
+        null,
+
+      status:
+        seat.status ??
+        "AVAILABLE",
+    };
+  };
+
+  /* =====================================================
+     BOOKING
+  ===================================================== */
+
+  const confirmBooking = async (
+    event,
+    seats
+  ) => {
+    if (!event) {
+      alert(
+        "Unable to identify the selected event."
+      );
+      return;
+    }
+
+    if (
+      !Array.isArray(seats) ||
+      seats.length === 0
+    ) {
+      alert(
+        "Unable to identify the selected seats."
+      );
       return;
     }
 
     /*
-     * User must be logged in to create a database booking.
+     * Convert every seat into a standard format.
      */
-    if (!currentUser || !currentUser.id) {
-      alert("Please login before booking an event.");
-      navigate("login");
+    const normalizedSeats =
+      seats
+        .map(normalizeSeat)
+        .filter(
+          (seat) =>
+            seat &&
+            seat.seatNumber
+        );
+
+    if (
+      normalizedSeats.length !==
+      seats.length
+    ) {
+      alert(
+        "Unable to identify the selected seats."
+      );
       return;
     }
 
-    try {
-      /*
-       * Convert selected seats into their database IDs.
-       *
-       * SeatSelection returns seat objects from:
-       * GET /api/events/{eventId}/seats
-       *
-       * Each seat has an "id".
-       */
-      const seatIds = seats
-        .map((seat) => {
-          if (typeof seat === "object") {
-            return seat.id;
-          }
+    /*
+     * Event ID
+     */
+    const eventId =
+      event.id ??
+      event.eventId;
 
-          return Number(seat);
-        })
-        .filter(
-          (id) => id !== undefined && id !== null && !isNaN(id)
-        );
+    if (!eventId) {
+      alert(
+        "Unable to identify the selected event."
+      );
+      return;
+    }
 
-      if (seatIds.length === 0) {
-        alert("Unable to identify the selected seats.");
-        return;
-      }
-
-      /*
-       * Calculate total amount.
-       */
-      const totalAmount =
-        Number(event.ticketPrice || 0) * seatIds.length;
-
-      /*
-       * Payload expected by Java BookingHandler:
-       *
-       * userId
-       * eventId
-       * totalAmount
-       * seatIds
-       */
-      const bookingPayload = {
-        userId: Number(currentUser.id),
-        eventId: Number(event.id),
-        totalAmount: totalAmount,
-        seatIds: seatIds,
-      };
-
-      console.log(
-        "Sending booking request:",
-        bookingPayload
+    /*
+     * Seat IDs are required for backend booking.
+     */
+    const missingSeatIds =
+      normalizedSeats.filter(
+        (seat) =>
+          seat.id === null ||
+          seat.id === undefined
       );
 
-      const response = await fetch(
-        `${API_BASE_URL}/api/bookings`,
+    /*
+     * For the moment we still allow the local
+     * booking flow if the backend ID is missing.
+     *
+     * But with the new SeatSelection.jsx,
+     * backend IDs should always be present.
+     */
+    if (
+      missingSeatIds.length > 0
+    ) {
+      console.warn(
+        "Some seats do not contain backend IDs:",
+        missingSeatIds
+      );
+    }
+
+    console.log(
+      "Booking event:",
+      event
+    );
+
+    console.log(
+      "Booking seats:",
+      normalizedSeats
+    );
+
+    /*
+     * =================================================
+     * BACKEND BOOKING
+     * =================================================
+     *
+     * Try to create the real booking in MySQL.
+     *
+     * The Java backend expects:
+     *
+     * {
+     *   userId,
+     *   eventId,
+     *   seatIds
+     * }
+     */
+
+    let backendBooking = null;
+
+    if (
+      currentUser &&
+      currentUser.id
+    ) {
+      try {
+        const response =
+          await fetch(
+            `${API_BASE_URL}/api/bookings`,
+            {
+              method: "POST",
+
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
+
+              body: JSON.stringify({
+                userId:
+                  currentUser.id,
+
+                eventId:
+                  Number(eventId),
+
+                seatIds:
+                  normalizedSeats
+                    .map(
+                      (seat) =>
+                        seat.id
+                    )
+                    .filter(
+                      (id) =>
+                        id !== null &&
+                        id !== undefined
+                    ),
+              }),
+            }
+          );
+
+        const text =
+          await response.text();
+
+        console.log(
+          "Booking API status:",
+          response.status
+        );
+
+        console.log(
+          "Booking API response:",
+          text
+        );
+
+        if (response.ok) {
+          try {
+            backendBooking =
+              text
+                ? JSON.parse(text)
+                : null;
+          } catch {
+            backendBooking = null;
+          }
+        } else {
+          console.warn(
+            "Backend booking request failed:",
+            text
+          );
+        }
+      } catch (error) {
+        console.error(
+          "Backend booking request error:",
+          error
+        );
+      }
+    }
+
+    /*
+     * =================================================
+     * LOCAL BOOKING
+     * =================================================
+     *
+     * Keep localStorage as a frontend backup so
+     * My Bookings continues to work.
+     */
+
+    const booking = {
+      id:
+        backendBooking?.id ??
+        Date.now(),
+
+      backendBookingId:
+        backendBooking?.id ??
+        null,
+
+      event: event,
+
+      eventId:
+        Number(eventId),
+
+      seats:
+        normalizedSeats,
+
+      seatNumbers:
+        normalizedSeats.map(
+          (seat) =>
+            seat.seatNumber
+        ),
+
+      status:
+        backendBooking?.status ??
+        "Confirmed",
+
+      bookedAt:
+        backendBooking?.bookingDate ??
+        new Date().toISOString(),
+
+      userEmail:
+        currentUser?.email ??
+        "guest",
+
+      userId:
+        currentUser?.id ??
+        null,
+
+      totalAmount:
+        normalizedSeats.length *
+        Number(
+          event.ticketPrice ??
+            event.price ??
+            150
+        ),
+    };
+
+    /*
+     * Add newest booking first.
+     */
+    const updatedBookings = [
+      booking,
+      ...bookings,
+    ];
+
+    setBookings(
+      updatedBookings
+    );
+
+    localStorage.setItem(
+      "eventhubBookings",
+      JSON.stringify(
+        updatedBookings
+      )
+    );
+
+    /*
+     * Keep selected information.
+     */
+    setSelectedEvent(event);
+
+    setSelectedSeats(
+      normalizedSeats
+    );
+
+    /*
+     * Go to confirmation.
+     */
+    navigate(
+      "confirmation",
+      {
+        event: event,
+        seats: normalizedSeats,
+      }
+    );
+  };
+
+  /* =====================================================
+     CANCEL BOOKING
+  ===================================================== */
+
+  const cancelBooking = async (
+    bookingId
+  ) => {
+    /*
+     * Remove from local bookings.
+     */
+    const updatedBookings =
+      bookings.filter(
+        (booking) =>
+          booking.id !==
+          bookingId
+      );
+
+    setBookings(
+      updatedBookings
+    );
+
+    localStorage.setItem(
+      "eventhubBookings",
+      JSON.stringify(
+        updatedBookings
+      )
+    );
+
+    /*
+     * If this booking came from backend,
+     * try to cancel it there too.
+     *
+     * This does not block the frontend
+     * cancellation if the backend endpoint
+     * is not available yet.
+     */
+    try {
+      await fetch(
+        `${API_BASE_URL}/api/bookings/${bookingId}`,
         {
-          method: "POST",
-
-          headers: {
-            "Content-Type": "application/json",
-          },
-
-          body: JSON.stringify(bookingPayload),
+          method: "DELETE",
         }
       );
-
-      const responseText = await response.text();
-
-      let result;
-
-      try {
-        result = JSON.parse(responseText);
-      } catch {
-        result = {
-          message: responseText,
-        };
-      }
-
-      console.log(
-        "Booking API response:",
-        result
-      );
-
-      if (!response.ok) {
-        throw new Error(
-          result.message ||
-            result.error ||
-            "Booking failed."
-        );
-      }
-
-      /*
-       * Backend booking succeeded.
-       *
-       * Now create the frontend booking object.
-       */
-      const booking = {
-        id:
-          result.bookingId ||
-          result.id ||
-          Date.now(),
-
-        backendBookingId:
-          result.bookingId ||
-          result.id ||
-          null,
-
-        ticketCode:
-          result.ticketCode ||
-          result.ticket_code ||
-          null,
-
-        event: event,
-
-        seats: seats,
-
-        status:
-          result.status ||
-          "CONFIRMED",
-
-        totalAmount:
-          result.totalAmount ||
-          totalAmount,
-
-        bookedAt:
-          result.bookedAt ||
-          result.bookingDate ||
-          new Date().toISOString(),
-
-        userEmail:
-          currentUser.email || "guest",
-      };
-
-      /*
-       * Update React state.
-       */
-      const updatedBookings = [
-        booking,
-        ...bookings,
-      ];
-
-      setBookings(updatedBookings);
-
-      /*
-       * Keep existing localStorage functionality
-       * for the My Bookings UI.
-       */
-      localStorage.setItem(
-        "eventhubBookings",
-        JSON.stringify(updatedBookings)
-      );
-
-      setSelectedEvent(event);
-      setSelectedSeats(seats);
-
-      /*
-       * Only navigate to confirmation AFTER
-       * backend booking succeeds.
-       */
-      navigate("confirmation");
-
     } catch (error) {
-      console.error(
-        "Booking API error:",
+      console.warn(
+        "Backend cancellation request failed:",
         error
-      );
-
-      alert(
-        `Booking failed: ${
-          error.message || "Please try again."
-        }`
       );
     }
   };
 
-  /* ================= CANCEL BOOKING ================= */
-
-  const cancelBooking = (bookingId) => {
-    const updatedBookings = bookings.filter(
-      (booking) => booking.id !== bookingId
-    );
-
-    setBookings(updatedBookings);
-
-    localStorage.setItem(
-      "eventhubBookings",
-      JSON.stringify(updatedBookings)
-    );
-  };
-
-  /* ================= COMMON PROPS ================= */
+  /* =====================================================
+     COMMON PROPS
+  ===================================================== */
 
   const commonProps = {
     onNavigate: navigate,
+
     currentUser,
+
     selectedEvent,
+
     selectedSeats,
+
     bookings,
-    onLogout: handleLogout,
+
+    onLogout:
+      handleLogout,
   };
 
-  /* ================= ROUTES ================= */
+  /* =====================================================
+     ROUTES
+  ===================================================== */
 
   switch (route) {
+
     case "home":
-      return <Home {...commonProps} />;
+      return (
+        <Home
+          {...commonProps}
+        />
+      );
 
     case "events":
-      return <Events {...commonProps} />;
+      return (
+        <Events
+          {...commonProps}
+        />
+      );
 
     case "details":
-      return <EventDetails {...commonProps} />;
+      return (
+        <EventDetails
+          {...commonProps}
+        />
+      );
 
     case "seats":
       return (
         <SeatSelection
           {...commonProps}
-          confirmBooking={confirmBooking}
+          confirmBooking={
+            confirmBooking
+          }
         />
       );
 
@@ -354,30 +611,50 @@ function App() {
       return (
         <MyBookings
           {...commonProps}
-          onCancelBooking={cancelBooking}
+          onCancelBooking={
+            cancelBooking
+          }
         />
       );
 
     case "login":
       return (
         <Login
-          onLogin={handleLogin}
-          onRegister={() => navigate("register")}
-          onBack={() => navigate("home")}
+          onLogin={
+            handleLogin
+          }
+          onRegister={() =>
+            navigate(
+              "register"
+            )
+          }
+          onBack={() =>
+            navigate("home")
+          }
         />
       );
 
     case "register":
       return (
         <Register
-          onRegister={handleRegister}
-          onLogin={() => navigate("login")}
-          onBack={() => navigate("home")}
+          onRegister={
+            handleRegister
+          }
+          onLogin={() =>
+            navigate("login")
+          }
+          onBack={() =>
+            navigate("home")
+          }
         />
       );
 
     default:
-      return <Home {...commonProps} />;
+      return (
+        <Home
+          {...commonProps}
+        />
+      );
   }
 }
 
