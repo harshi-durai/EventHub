@@ -1,0 +1,434 @@
+
+/* =========================================================
+   EVENTHUB GLOBAL CSS
+   BLACK / WHITE / MINIMAL
+   ========================================================= */
+
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&display=swap");
+
+
+/* =========================================================
+   RESET
+   ========================================================= */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: #050505;
+  color: #f5f5f5;
+  font-family: "Inter", sans-serif;
+  overflow-x: hidden;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+
+/* =========================================================
+   ROOT
+   ========================================================= */
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+  background: #050505;
+}
+
+
+/* =========================================================
+   GLOBAL PAGE
+   ========================================================= */
+
+.home-page,
+.events-page,
+.event-details-page,
+.seat-page,
+.booking-page,
+.login-page,
+.register-page,
+.my-bookings-page {
+  width: 100%;
+  min-height: 100vh;
+  background: #050505;
+  color: #f5f5f5;
+}
+
+
+/* =========================================================
+   COMMON CONTAINER
+   ========================================================= */
+
+.container,
+.page-container {
+  width: min(1320px, calc(100% - 80px));
+  margin: 0 auto;
+}
+
+
+/* =========================================================
+   COMMON HEADER
+   ========================================================= */
+
+.home-header,
+.events-header,
+.details-header,
+.seat-header,
+.bookings-header {
+  width: min(1320px, calc(100% - 80px));
+  height: 86px;
+  margin: 0 auto;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  border-bottom: 1px solid #242424;
+}
+
+
+/* =========================================================
+   LOGO
+   ========================================================= */
+
+.brand,
+.logo {
+  color: #ffffff;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -1px;
+  white-space: nowrap;
+}
+
+.brand span,
+.logo span {
+  color: #8f8f8f;
+}
+
+
+/* =========================================================
+   NAVIGATION
+   ========================================================= */
+
+.main-nav,
+.nav-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 42px;
+}
+
+.nav-link {
+  border: 0;
+  outline: none;
+  background: transparent;
+
+  color: #777777;
+
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+
+  letter-spacing: 2px;
+  text-transform: uppercase;
+
+  padding: 10px 0;
+
+  transition: color 0.25s ease;
+}
+
+.nav-link:hover,
+.nav-link.active {
+  color: #ffffff;
+}
+
+.nav-link.active {
+  position: relative;
+}
+
+.nav-link.active::after {
+  content: "";
+
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+
+  width: 28px;
+  height: 1px;
+
+  margin: auto;
+
+  background: #ffffff;
+}
+
+
+/* =========================================================
+   LOGIN / LOGOUT
+   ========================================================= */
+
+.login-button,
+.login-btn {
+  min-width: 150px;
+  height: 46px;
+
+  padding: 0 20px;
+
+  border: 1px solid #333333;
+  background: #ffffff;
+  color: #050505;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+
+  transition:
+    background 0.25s ease,
+    color 0.25s ease;
+}
+
+.login-button:hover,
+.login-btn:hover {
+  background: #050505;
+  color: #ffffff;
+  border-color: #ffffff;
+}
+
+.login-button span {
+  font-size: 16px;
+}
+
+
+/* =========================================================
+   COMMON BUTTONS
+   ========================================================= */
+
+.primary-button {
+  min-height: 52px;
+
+  padding: 0 26px;
+
+  border: 1px solid #ffffff;
+  background: #ffffff;
+  color: #050505;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 25px;
+
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+
+  transition: all 0.25s ease;
+}
+
+.primary-button:hover {
+  background: transparent;
+  color: #ffffff;
+}
+
+.primary-button span {
+  font-size: 17px;
+}
+
+.secondary-button {
+  min-height: 52px;
+
+  padding: 0 26px;
+
+  border: 1px solid #3a3a3a;
+  background: transparent;
+  color: #ffffff;
+
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+
+  transition: all 0.25s ease;
+}
+
+.secondary-button:hover {
+  background: #ffffff;
+  color: #050505;
+}
+
+
+/* =========================================================
+   SECTION NUMBER
+   ========================================================= */
+
+.section-number {
+  display: inline-block;
+
+  color: #777777;
+
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 10px;
+  font-weight: 500;
+
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+}
+
+
+/* =========================================================
+   COMMON HEADINGS
+   ========================================================= */
+
+h1,
+h2,
+h3 {
+  font-family: "Space Grotesk", sans-serif;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin-top: 0;
+}
+
+
+/* =========================================================
+   SCROLLBAR
+   ========================================================= */
+
+::-webkit-scrollbar {
+  width: 7px;
+}
+
+::-webkit-scrollbar-track {
+  background: #050505;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #333333;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555555;
+}
+
+
+/* =========================================================
+   SELECTION
+   ========================================================= */
+
+::selection {
+  background: #ffffff;
+  color: #050505;
+}
+
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+
+@media (max-width: 1100px) {
+
+  .home-header,
+  .events-header,
+  .details-header,
+  .seat-header,
+  .bookings-header {
+    width: min(100% - 48px, 900px);
+  }
+
+  .container,
+  .page-container {
+    width: min(100% - 48px, 900px);
+  }
+
+  .main-nav,
+  .nav-links {
+    gap: 24px;
+  }
+
+  .login-button,
+  .login-btn {
+    min-width: 120px;
+  }
+}
+
+
+@media (max-width: 768px) {
+
+  .home-header,
+  .events-header,
+  .details-header,
+  .seat-header,
+  .bookings-header {
+    width: calc(100% - 32px);
+    height: 72px;
+  }
+
+  .container,
+  .page-container {
+    width: calc(100% - 32px);
+  }
+
+  .brand,
+  .logo {
+    font-size: 19px;
+  }
+
+  .main-nav,
+  .nav-links {
+    display: none;
+  }
+
+  .login-button,
+  .login-btn {
+    min-width: 110px;
+    height: 42px;
+    font-size: 9px;
+  }
+}
+
+
+/* =========================================================
+   PREVENT HORIZONTAL OVERFLOW
+   ========================================================= */
+
+.home-page *,
+.events-page *,
+.event-details-page *,
+.seat-page *,
+.booking-page *,
+.login-page *,
+.register-page *,
+.my-bookings-page * {
+  max-width: 100%;
+}

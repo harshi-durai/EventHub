@@ -1,0 +1,406 @@
+
+/* =========================================================
+   SEAT SELECTION
+========================================================= */
+
+.seat-page {
+  min-height: 100vh;
+  background: #050505;
+  color: #f5f5f5;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+
+/* ================= HEADER ================= */
+
+.seat-header {
+  height: 84px;
+  padding: 0 6%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #202020;
+  background: #050505;
+}
+
+.seat-brand {
+  border: 0;
+  background: transparent;
+  color: white;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -1px;
+  cursor: pointer;
+}
+
+.seat-brand span {
+  font-weight: 300;
+}
+
+.seat-header-title {
+  font-size: 11px;
+  letter-spacing: 4px;
+  color: #888;
+}
+
+.seat-back {
+  border: 1px solid #333;
+  background: transparent;
+  color: white;
+  padding: 12px 18px;
+  font-size: 10px;
+  letter-spacing: 2px;
+  cursor: pointer;
+  transition: 0.25s ease;
+}
+
+.seat-back:hover {
+  background: white;
+  color: black;
+}
+
+
+/* ================= MAIN ================= */
+
+.seat-main {
+  width: min(1250px, 90%);
+  margin: auto;
+  padding: 60px 0 80px;
+}
+
+
+/* ================= EVENT INFO ================= */
+
+.seat-event-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding-bottom: 45px;
+  border-bottom: 1px solid #202020;
+}
+
+.seat-event-info span {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 3px;
+  color: #777;
+  margin-bottom: 14px;
+}
+
+.seat-event-info h1 {
+  margin: 0;
+  font-size: clamp(38px, 5vw, 72px);
+  font-weight: 300;
+  letter-spacing: -3px;
+  line-height: 0.95;
+}
+
+.seat-event-info p {
+  margin: 20px 0 0;
+  color: #777;
+  font-size: 13px;
+  letter-spacing: 1px;
+}
+
+.seat-price {
+  text-align: right;
+}
+
+.seat-price small {
+  display: block;
+  color: #666;
+  font-size: 9px;
+  letter-spacing: 3px;
+  margin-bottom: 8px;
+}
+
+.seat-price strong {
+  font-size: 30px;
+  font-weight: 400;
+}
+
+
+/* ================= SEAT LAYOUT ================= */
+
+.seat-layout {
+  padding: 55px 0;
+}
+
+
+/* ================= SCREEN ================= */
+
+.screen-area {
+  width: min(760px, 90%);
+  margin: auto;
+  text-align: center;
+}
+
+.screen {
+  height: 8px;
+  border-radius: 50%;
+  background: #eee;
+  box-shadow: 0 0 30px rgba(255, 255, 255, 0.25);
+}
+
+.screen-area p {
+  color: #555;
+  font-size: 9px;
+  letter-spacing: 4px;
+  margin-top: 16px;
+}
+
+
+/* ================= SEAT MAP ================= */
+
+.seat-map {
+  margin: 55px auto 0;
+  width: min(900px, 100%);
+}
+
+.seat-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  margin-bottom: 13px;
+}
+
+.row-label {
+  width: 20px;
+  color: #555;
+  font-size: 10px;
+  text-align: center;
+  font-weight: bold;
+}
+
+.seat-row-inner {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+}
+
+.seat {
+  width: 42px;
+  height: 38px;
+  border: 1px solid #3b3b3b;
+  background: #111;
+  color: #aaa;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 600;
+  transition: 0.2s ease;
+}
+
+.seat:hover:not(:disabled) {
+  border-color: white;
+  color: white;
+  transform: translateY(-2px);
+}
+
+.seat.selected {
+  background: white;
+  color: black;
+  border-color: white;
+}
+
+.seat.booked {
+  background: #292929;
+  color: #555;
+  border-color: #292929;
+  cursor: not-allowed;
+}
+
+.seat-gap {
+  width: 20px;
+}
+
+
+/* ================= LEGEND ================= */
+
+.seat-legend {
+  display: flex;
+  justify-content: center;
+  gap: 35px;
+  margin-top: 45px;
+}
+
+.seat-legend > div {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #777;
+  font-size: 9px;
+  letter-spacing: 2px;
+}
+
+.legend-seat {
+  width: 14px;
+  height: 14px;
+  display: inline-block;
+  border: 1px solid #444;
+  background: #111;
+}
+
+.legend-seat.selected {
+  background: white;
+  border-color: white;
+}
+
+.legend-seat.booked {
+  background: #292929;
+  border-color: #292929;
+}
+
+
+/* ================= SUMMARY ================= */
+
+.booking-summary {
+  border-top: 1px solid #242424;
+  border-bottom: 1px solid #242424;
+  padding: 28px 0;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 45px;
+}
+
+.summary-left > span,
+.summary-price > span {
+  display: block;
+  color: #666;
+  font-size: 9px;
+  letter-spacing: 3px;
+  margin-bottom: 12px;
+}
+
+.selected-seat-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.selected-seat-list strong {
+  color: #555;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.summary-seat {
+  border: 1px solid #444;
+  padding: 7px 10px;
+  font-size: 10px;
+  color: white;
+}
+
+.summary-price {
+  text-align: right;
+}
+
+.summary-price strong {
+  font-size: 28px;
+  font-weight: 400;
+}
+
+.book-now-button {
+  min-width: 180px;
+  height: 54px;
+  border: 1px solid white;
+  background: white;
+  color: black;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  cursor: pointer;
+  transition: 0.25s ease;
+}
+
+.book-now-button span {
+  margin-left: 15px;
+  font-size: 16px;
+}
+
+.book-now-button:hover {
+  background: transparent;
+  color: white;
+}
+
+
+/* ================= RESPONSIVE ================= */
+
+@media (max-width: 850px) {
+
+  .seat-header-title {
+    display: none;
+  }
+
+  .seat-event-info {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 30px;
+  }
+
+  .seat-price {
+    text-align: left;
+  }
+
+  .seat {
+    width: 32px;
+    height: 32px;
+  }
+
+  .seat-row {
+    gap: 7px;
+  }
+
+  .seat-row-inner {
+    gap: 5px;
+  }
+
+  .seat-gap {
+    width: 7px;
+  }
+
+  .booking-summary {
+    grid-template-columns: 1fr;
+    gap: 25px;
+  }
+
+  .summary-price {
+    text-align: left;
+  }
+
+  .book-now-button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 550px) {
+
+  .seat-main {
+    width: 94%;
+    padding-top: 35px;
+  }
+
+  .seat-event-info h1 {
+    font-size: 42px;
+  }
+
+  .seat {
+    width: 25px;
+    height: 28px;
+    font-size: 8px;
+  }
+
+  .seat-row-inner {
+    gap: 3px;
+  }
+
+  .seat-gap {
+    width: 3px;
+  }
+
+  .seat-legend {
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+}
