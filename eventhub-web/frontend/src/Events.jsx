@@ -26,7 +26,7 @@ function Events({ onNavigate }) {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    fetch("http://localhost:8080/api/events")
+    fetch("https://eventhub-xhdu.onrender.com/api/events")
       .then((response) => {
         if (!response.ok) {
           throw new Error("Unable to load events");

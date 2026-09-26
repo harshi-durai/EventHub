@@ -24,7 +24,7 @@ function Login({ onLogin, onRegister, onBack }) {
 
     try {
       const response = await fetch(
-        "http://localhost:8080/api/login",
+        "https://eventhub-xhdu.onrender.com/api/login",
         {
           method: "POST",
           headers: {

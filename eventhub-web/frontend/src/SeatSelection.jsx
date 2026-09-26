@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import "./SeatSelection.css";
 
-const API_BASE_URL = "http://localhost:8080";
+const API_BASE_URL = "https://eventhub-xhdu.onrender.com";
 
 const ROWS = ["A", "B", "C", "D", "E", "F", "G", "H"];
 const SEATS_PER_ROW = 10;
