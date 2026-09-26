@@ -4,7 +4,6 @@ import "./MyBookings.css";
 
 function MyBookings({
   bookings = [],
-  currentUser,
   onNavigate,
   onCancelBooking,
 }) {
@@ -22,6 +21,105 @@ function MyBookings({
     }
   };
 
+  /*
+   * Convert any seat format into a safe display string.
+   *
+   * Supports:
+   * "A5"
+   *
+   * OR
+   * {
+   *   id: 35,
+   *   seatId: 35,
+   *   eventId: 3,
+   *   seatNumber: "A5",
+   *   status: "BOOKED"
+   * }
+   */
+  const getSeatNumber = (seat) => {
+    if (typeof seat === "string") {
+      return seat;
+    }
+
+    if (typeof seat === "number") {
+      return String(seat);
+    }
+
+    if (seat && typeof seat === "object") {
+      return (
+        seat.seatNumber ||
+        seat.seat ||
+        seat.name ||
+        String(seat.seatId || seat.id || "")
+      );
+    }
+
+    return "";
+  };
+
+  const getEventName = (booking) => {
+    return (
+      booking?.event?.name ||
+      booking?.event?.title ||
+      booking?.eventName ||
+      "Event"
+    );
+  };
+
+  const getEventDate = (booking) => {
+    return (
+      booking?.event?.eventDate ||
+      booking?.event?.date ||
+      "Date not available"
+    );
+  };
+
+  const getEventTime = (booking) => {
+    return (
+      booking?.event?.eventTime ||
+      booking?.event?.time ||
+      ""
+    );
+  };
+
+  const getVenue = (booking) => {
+    return (
+      booking?.event?.venue ||
+      booking?.event?.location ||
+      "Venue not available"
+    );
+  };
+
+  const getPrice = (booking) => {
+    return Number(
+      booking?.event?.ticketPrice ??
+      booking?.event?.price ??
+      0
+    );
+  };
+
+  const formatDate = (date) => {
+    if (!date) {
+      return "Date not available";
+    }
+
+    try {
+      const parsed = new Date(date);
+
+      if (Number.isNaN(parsed.getTime())) {
+        return String(date);
+      }
+
+      return parsed.toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+    } catch {
+      return String(date);
+    }
+  };
+
   return (
     <div className="bookings-page">
 
@@ -31,8 +129,8 @@ function MyBookings({
 
         <button
           className="bookings-logo"
-          onClick={() => onNavigate("home")}
           type="button"
+          onClick={() => onNavigate("home")}
         >
           EVENT<span>HUB</span>
         </button>
@@ -43,39 +141,35 @@ function MyBookings({
 
         <button
           className="bookings-back"
-          onClick={() => onNavigate("home")}
           type="button"
+          onClick={() => onNavigate("home")}
         >
           ← HOME
         </button>
 
       </header>
 
-
       {/* ================= MAIN ================= */}
 
       <main className="bookings-main">
 
-        <div className="bookings-heading">
+        <section className="bookings-heading">
 
-          <span>
-            EVENTHUB / YOUR EXPERIENCES
-          </span>
+          <div>
+            <span>EVENTHUB / ACCOUNT</span>
 
-          <h1>
-            My
-            <br />
-            Bookings.
-          </h1>
+            <h1>
+              MY BOOKINGS<span>.</span>
+            </h1>
+          </div>
 
           <p>
-            {currentUser?.name
-              ? `Welcome back, ${currentUser.name}.`
+            {bookings.length === 0
+              ? "Your confirmed event bookings will appear here."
               : "Your confirmed event bookings."}
           </p>
 
-        </div>
-
+        </section>
 
         {/* ================= EMPTY ================= */}
 
@@ -88,17 +182,17 @@ function MyBookings({
             </div>
 
             <h2>
-              No bookings yet.
+              NO BOOKINGS YET
             </h2>
 
             <p>
-              Discover an event and reserve
-              your seats to see your booking here.
+              You have not booked any events yet.
+              Choose an event and reserve your seats.
             </p>
 
             <button
-              onClick={() => onNavigate("events")}
               type="button"
+              onClick={() => onNavigate("events")}
             >
               EXPLORE EVENTS →
             </button>
@@ -107,97 +201,150 @@ function MyBookings({
 
         ) : (
 
+          /* ================= BOOKING LIST ================= */
+
           <section className="booking-list">
 
             {bookings.map((booking, index) => {
 
-              const event = booking.event || {};
+              const event = booking?.event || {};
+
+              /*
+               * IMPORTANT:
+               * Convert backend seat objects into seat numbers.
+               */
+              const rawSeats = Array.isArray(
+                booking?.seats
+              )
+                ? booking.seats
+                : [];
+
+              const seatNumbers = rawSeats
+                .map(getSeatNumber)
+                .filter(Boolean);
+
+              const price = getPrice(booking);
+
+              const total =
+                seatNumbers.length * price;
 
               return (
                 <article
                   className="booking-card"
-                  key={booking.id}
+                  key={
+                    booking?.id ??
+                    `${event?.id ?? "event"}-${index}`
+                  }
                 >
 
-                  {/* NUMBER */}
+                  {/* ================= INDEX ================= */}
 
                   <div className="booking-index">
-                    0{index + 1}
+                    {String(index + 1).padStart(2, "0")}
                   </div>
 
-
-                  {/* EVENT */}
+                  {/* ================= EVENT ================= */}
 
                   <div className="booking-event">
 
-                    <span>
-                      {event.category ||
-                        "EVENT"}
+                    <span className="booking-label">
+                      EVENT
                     </span>
 
                     <h2>
-                      {event.title ||
-                        "Event"}
+                      {getEventName(booking)}
                     </h2>
 
                     <p>
-                      {event.date ||
-                        "Date"}
-                      {"  •  "}
-                      {event.location ||
-                        "Location"}
+                      {formatDate(
+                        getEventDate(booking)
+                      )}
+
+                      {getEventTime(booking) && (
+                        <>
+                          {"  •  "}
+                          {getEventTime(booking)}
+                        </>
+                      )}
+                    </p>
+
+                    <p>
+                      {getVenue(booking)}
                     </p>
 
                   </div>
 
-
-                  {/* SEATS */}
+                  {/* ================= SEATS ================= */}
 
                   <div className="booking-seats">
 
-                    <small>
+                    <span className="booking-label">
                       SEATS
-                    </small>
+                    </span>
 
-                    <div>
-                      {(booking.seats || []).map(
-                        (seat) => (
-                          <span key={seat}>
-                            {seat}
-                          </span>
+                    <div className="booking-seat-list">
+
+                      {seatNumbers.length > 0 ? (
+
+                        seatNumbers.map(
+                          (seat, seatIndex) => (
+                            <span
+                              className="summary-seat"
+                              key={`${seat}-${seatIndex}`}
+                            >
+                              {seat}
+                            </span>
+                          )
                         )
+
+                      ) : (
+
+                        <span>
+                          No seat information
+                        </span>
+
                       )}
+
                     </div>
 
                   </div>
 
+                  {/* ================= TOTAL ================= */}
 
-                  {/* STATUS */}
+                  <div className="booking-total">
 
-                  <div className="booking-status">
-
-                    <small>
-                      STATUS
-                    </small>
+                    <span className="booking-label">
+                      TOTAL
+                    </span>
 
                     <strong>
-                      {booking.status ||
-                        "Confirmed"}
+                      ₹{total}
                     </strong>
 
                   </div>
 
+                  {/* ================= STATUS ================= */}
 
-                  {/* ACTION */}
+                  <div className="booking-status">
+
+                    <span className="booking-label">
+                      STATUS
+                    </span>
+
+                    <strong>
+                      {booking?.status || "Confirmed"}
+                    </strong>
+
+                  </div>
+
+                  {/* ================= CANCEL ================= */}
 
                   <button
                     className="cancel-booking"
-                    onClick={() =>
-                      handleCancel(
-                        booking.id
-                      )
-                    }
                     type="button"
+                    onClick={() =>
+                      handleCancel(booking?.id)
+                    }
                   >
                     CANCEL
                   </button>
@@ -207,7 +354,6 @@ function MyBookings({
             })}
 
           </section>
-
         )}
 
       </main>
