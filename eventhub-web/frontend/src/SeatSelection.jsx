@@ -13,11 +13,24 @@ function SeatSelection({
   confirmBooking,
   onNavigate,
 }) {
-  const [selected, setSelected] = useState(selectedSeats || []);
+  /*
+   * selected contains seat numbers:
+   * ["A1", "A2", "A5"]
+   *
+   * backendSeats contains complete backend objects:
+   * {
+   *   id: 31,
+   *   eventId: 3,
+   *   seatNumber: "A1",
+   *   status: "AVAILABLE"
+   * }
+   */
 
-  // Backend seat data
+  const [selected, setSelected] = useState(
+    Array.isArray(selectedSeats) ? selectedSeats : []
+  );
+
   const [backendSeats, setBackendSeats] = useState([]);
-
   const [loadingSeats, setLoadingSeats] = useState(true);
   const [seatError, setSeatError] = useState("");
 
@@ -41,7 +54,7 @@ function SeatSelection({
     null;
 
   /* =====================================================
-     LOAD SEATS FROM JAVA BACKEND
+     LOAD SEATS
   ===================================================== */
 
   useEffect(() => {
@@ -72,9 +85,50 @@ function SeatSelection({
 
         const data = await response.json();
 
-        console.log("Backend seats:", data);
+        console.log(
+          "Backend seats:",
+          data
+        );
 
-        setBackendSeats(data);
+        /*
+         * Normalize backend response.
+         *
+         * Supports:
+         * eventId
+         * event_id
+         *
+         * seatNumber
+         * seat_number
+         */
+
+        const normalizedSeats = Array.isArray(data)
+          ? data.map((seat) => ({
+              id:
+                seat.id ??
+                seat.seatId ??
+                seat.seat_id,
+
+              eventId:
+                seat.eventId ??
+                seat.event_id ??
+                eventId,
+
+              seatNumber:
+                seat.seatNumber ??
+                seat.seat_number,
+
+              status:
+                seat.status ??
+                "AVAILABLE",
+            }))
+          : [];
+
+        console.log(
+          "Normalized seats:",
+          normalizedSeats
+        );
+
+        setBackendSeats(normalizedSeats);
 
       } catch (error) {
         console.error(
@@ -125,34 +179,71 @@ function SeatSelection({
   }, [backendSeats]);
 
   /* =====================================================
+     FIND BACKEND SEAT
+  ===================================================== */
+
+  const findBackendSeat = (seatNumber) => {
+    return backendSeats.find(
+      (seat) =>
+        String(seat.seatNumber).toUpperCase() ===
+        String(seatNumber).toUpperCase()
+    );
+  };
+
+  /* =====================================================
      SEAT TOGGLE
   ===================================================== */
 
-  const toggleSeat = (seatId) => {
-    // Don't allow backend-booked seats
-    if (bookedSeats.includes(seatId)) {
+  const toggleSeat = (seatNumber) => {
+    const backendSeat =
+      findBackendSeat(seatNumber);
+
+    /*
+     * Seat doesn't exist in backend.
+     */
+    if (!backendSeat) {
+      alert(
+        `Seat ${seatNumber} is not available in the backend.`
+      );
       return;
     }
 
-    // Don't allow seats that backend doesn't know
+    /*
+     * Already booked.
+     */
     if (
-      backendSeats.length > 0 &&
-      !availableSeats.includes(seatId)
+      String(backendSeat.status).toUpperCase() ===
+      "BOOKED"
     ) {
       return;
     }
 
-    if (selected.includes(seatId)) {
+    /*
+     * Only AVAILABLE seats can be selected.
+     */
+    if (
+      String(backendSeat.status).toUpperCase() !==
+      "AVAILABLE"
+    ) {
+      return;
+    }
+
+    /*
+     * Remove selected seat.
+     */
+    if (selected.includes(seatNumber)) {
       setSelected(
         selected.filter(
-          (seat) => seat !== seatId
+          (seat) => seat !== seatNumber
         )
       );
 
       return;
     }
 
-    // Maximum 8 seats
+    /*
+     * Maximum 8 seats.
+     */
     if (selected.length >= 8) {
       alert(
         "You can select a maximum of 8 seats."
@@ -160,9 +251,12 @@ function SeatSelection({
       return;
     }
 
+    /*
+     * Add seat number.
+     */
     setSelected([
       ...selected,
-      seatId,
+      seatNumber,
     ]);
   };
 
@@ -183,16 +277,42 @@ function SeatSelection({
       return;
     }
 
-    // Final check against backend data
-    const unavailableSelected =
-      selected.filter(
-        (seat) =>
-          bookedSeats.includes(seat)
-      );
+    /*
+     * Convert selected seat numbers into
+     * complete backend seat objects.
+     */
+    const selectedSeatObjects =
+      selected
+        .map((seatNumber) =>
+          findBackendSeat(seatNumber)
+        )
+        .filter(Boolean);
 
-    if (unavailableSelected.length > 0) {
+    console.log(
+      "Selected seat numbers:",
+      selected
+    );
+
+    console.log(
+      "Selected backend seats:",
+      selectedSeatObjects
+    );
+
+    /*
+     * Make sure every selected seat exists.
+     */
+    if (
+      selectedSeatObjects.length !==
+      selected.length
+    ) {
+      const missingSeats =
+        selected.filter(
+          (seatNumber) =>
+            !findBackendSeat(seatNumber)
+        );
+
       alert(
-        `These seats are already booked: ${unavailableSelected.join(
+        `Unable to identify the selected seats: ${missingSeats.join(
           ", "
         )}`
       );
@@ -200,15 +320,62 @@ function SeatSelection({
       return;
     }
 
-    console.log(
-      "Selected seats:",
-      selected
-    );
+    /*
+     * Final BOOKED check.
+     */
+    const unavailableSelected =
+      selectedSeatObjects.filter(
+        (seat) =>
+          String(seat.status).toUpperCase() !==
+          "AVAILABLE"
+      );
 
+    if (
+      unavailableSelected.length > 0
+    ) {
+      alert(
+        `These seats are no longer available: ${unavailableSelected
+          .map((seat) => seat.seatNumber)
+          .join(", ")}`
+      );
+
+      return;
+    }
+
+    /*
+     * IMPORTANT
+     *
+     * Pass seat numbers to the existing App.jsx
+     * booking system, but attach backend seat
+     * information as an additional property.
+     *
+     * This keeps your existing UI compatible.
+     */
+    const seatsForBooking =
+      selectedSeatObjects.map(
+        (seat) => ({
+          id: seat.id,
+          seatId: seat.id,
+          eventId:
+            seat.eventId ?? eventId,
+          seatNumber:
+            seat.seatNumber,
+          status:
+            seat.status,
+        })
+      );
+
+    /*
+     * Store a compatible representation.
+     *
+     * The first argument remains the event.
+     * The second argument is now the complete
+     * seat information.
+     */
     if (confirmBooking) {
       confirmBooking(
         selectedEvent,
-        selected
+        seatsForBooking
       );
     }
   };
@@ -280,7 +447,6 @@ function SeatSelection({
 
       </header>
 
-
       {/* =================================================
           MAIN
       ================================================= */}
@@ -325,24 +491,23 @@ function SeatSelection({
 
         </section>
 
-
         {/* =================================================
             ERROR
         ================================================= */}
 
         {seatError && (
           <div className="seat-error">
+
             {seatError}
 
             <br />
 
             <small>
-              Make sure the Java backend is running
-              on port 8080.
+              Please check the EventHub backend connection.
             </small>
+
           </div>
         )}
-
 
         {/* =================================================
             LOADING
@@ -386,7 +551,6 @@ function SeatSelection({
 
             </div>
 
-
             {/* =================================================
                 SEAT MAP
             ================================================= */}
@@ -404,7 +568,6 @@ function SeatSelection({
                     {row}
                   </span>
 
-
                   <div className="seat-row-inner">
 
                     {Array.from(
@@ -421,10 +584,8 @@ function SeatSelection({
                           `${row}${seatNumber}`;
 
                         const backendSeat =
-                          backendSeats.find(
-                            (seat) =>
-                              seat.seatNumber ===
-                              seatId
+                          findBackendSeat(
+                            seatId
                           );
 
                         const isSelected =
@@ -433,14 +594,21 @@ function SeatSelection({
                           );
 
                         const isBooked =
-                          bookedSeats.includes(
-                            seatId
-                          );
+                          backendSeat &&
+                          String(
+                            backendSeat.status
+                          ).toUpperCase() ===
+                            "BOOKED";
 
                         const isAvailable =
-                          availableSeats.includes(
-                            seatId
-                          );
+                          backendSeat &&
+                          String(
+                            backendSeat.status
+                          ).toUpperCase() ===
+                            "AVAILABLE";
+
+                        const isMissing =
+                          !backendSeat;
 
                         return (
                           <React.Fragment
@@ -453,6 +621,7 @@ function SeatSelection({
 
                             <button
                               type="button"
+
                               className={[
                                 "seat",
 
@@ -464,9 +633,13 @@ function SeatSelection({
                                   ? "booked"
                                   : "",
 
+                                isMissing
+                                  ? "unavailable"
+                                  : "",
+
+                                backendSeat &&
                                 !isBooked &&
-                                !isAvailable &&
-                                backendSeats.length > 0
+                                !isAvailable
                                   ? "unavailable"
                                   : "",
                               ]
@@ -474,12 +647,10 @@ function SeatSelection({
                                 .trim()}
 
                               disabled={
+                                loadingSeats ||
                                 isBooked ||
-                                (
-                                  backendSeats.length >
-                                    0 &&
-                                  !isAvailable
-                                )
+                                isMissing ||
+                                !isAvailable
                               }
 
                               onClick={() =>
@@ -493,9 +664,9 @@ function SeatSelection({
                                   ? `Seat ${seatId} is already booked`
                                   : isAvailable
                                   ? `Seat ${seatId} available`
-                                  : backendSeat
-                                  ? `Seat ${seatId} unavailable`
-                                  : `Seat ${seatId}`
+                                  : isMissing
+                                  ? `Seat ${seatId} is not configured`
+                                  : `Seat ${seatId} unavailable`
                               }
                             >
                               {seatNumber}
@@ -508,7 +679,6 @@ function SeatSelection({
 
                   </div>
 
-
                   <span className="row-label">
                     {row}
                   </span>
@@ -518,7 +688,6 @@ function SeatSelection({
               ))}
 
             </div>
-
 
             {/* =================================================
                 LEGEND
@@ -546,7 +715,6 @@ function SeatSelection({
           </section>
 
         )}
-
 
         {/* =================================================
             BOOKING SUMMARY
@@ -597,7 +765,6 @@ function SeatSelection({
 
           </div>
 
-
           <div className="summary-price">
 
             <span>
@@ -609,7 +776,6 @@ function SeatSelection({
             </strong>
 
           </div>
-
 
           <button
             className="book-now-button"
