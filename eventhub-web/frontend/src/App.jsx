@@ -11,6 +11,8 @@ import MyBookings from "./MyBookings";
 import Login from "./Login";
 import Register from "./Register";
 
+const API_BASE_URL = "https://eventhub-xhdu.onrender.com";
+
 function App() {
   const [route, setRoute] = useState(
     window.location.hash.replace("#/", "") || "home"
@@ -107,36 +109,192 @@ function App() {
 
   /* ================= BOOKING ================= */
 
-  const confirmBooking = (event, seats) => {
+  const confirmBooking = async (event, seats) => {
     if (!event || !seats || seats.length === 0) {
       return;
     }
 
-    const booking = {
-      id: Date.now(),
-      event: event,
-      seats: seats,
-      status: "Confirmed",
-      bookedAt: new Date().toISOString(),
-      userEmail: currentUser?.email || "guest",
-    };
+    /*
+     * User must be logged in to create a database booking.
+     */
+    if (!currentUser || !currentUser.id) {
+      alert("Please login before booking an event.");
+      navigate("login");
+      return;
+    }
 
-    const updatedBookings = [
-      booking,
-      ...bookings,
-    ];
+    try {
+      /*
+       * Convert selected seats into their database IDs.
+       *
+       * SeatSelection returns seat objects from:
+       * GET /api/events/{eventId}/seats
+       *
+       * Each seat has an "id".
+       */
+      const seatIds = seats
+        .map((seat) => {
+          if (typeof seat === "object") {
+            return seat.id;
+          }
 
-    setBookings(updatedBookings);
+          return Number(seat);
+        })
+        .filter(
+          (id) => id !== undefined && id !== null && !isNaN(id)
+        );
 
-    localStorage.setItem(
-      "eventhubBookings",
-      JSON.stringify(updatedBookings)
-    );
+      if (seatIds.length === 0) {
+        alert("Unable to identify the selected seats.");
+        return;
+      }
 
-    setSelectedEvent(event);
-    setSelectedSeats(seats);
+      /*
+       * Calculate total amount.
+       */
+      const totalAmount =
+        Number(event.ticketPrice || 0) * seatIds.length;
 
-    navigate("confirmation");
+      /*
+       * Payload expected by Java BookingHandler:
+       *
+       * userId
+       * eventId
+       * totalAmount
+       * seatIds
+       */
+      const bookingPayload = {
+        userId: Number(currentUser.id),
+        eventId: Number(event.id),
+        totalAmount: totalAmount,
+        seatIds: seatIds,
+      };
+
+      console.log(
+        "Sending booking request:",
+        bookingPayload
+      );
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/bookings`,
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type": "application/json",
+          },
+
+          body: JSON.stringify(bookingPayload),
+        }
+      );
+
+      const responseText = await response.text();
+
+      let result;
+
+      try {
+        result = JSON.parse(responseText);
+      } catch {
+        result = {
+          message: responseText,
+        };
+      }
+
+      console.log(
+        "Booking API response:",
+        result
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          result.message ||
+            result.error ||
+            "Booking failed."
+        );
+      }
+
+      /*
+       * Backend booking succeeded.
+       *
+       * Now create the frontend booking object.
+       */
+      const booking = {
+        id:
+          result.bookingId ||
+          result.id ||
+          Date.now(),
+
+        backendBookingId:
+          result.bookingId ||
+          result.id ||
+          null,
+
+        ticketCode:
+          result.ticketCode ||
+          result.ticket_code ||
+          null,
+
+        event: event,
+
+        seats: seats,
+
+        status:
+          result.status ||
+          "CONFIRMED",
+
+        totalAmount:
+          result.totalAmount ||
+          totalAmount,
+
+        bookedAt:
+          result.bookedAt ||
+          result.bookingDate ||
+          new Date().toISOString(),
+
+        userEmail:
+          currentUser.email || "guest",
+      };
+
+      /*
+       * Update React state.
+       */
+      const updatedBookings = [
+        booking,
+        ...bookings,
+      ];
+
+      setBookings(updatedBookings);
+
+      /*
+       * Keep existing localStorage functionality
+       * for the My Bookings UI.
+       */
+      localStorage.setItem(
+        "eventhubBookings",
+        JSON.stringify(updatedBookings)
+      );
+
+      setSelectedEvent(event);
+      setSelectedSeats(seats);
+
+      /*
+       * Only navigate to confirmation AFTER
+       * backend booking succeeds.
+       */
+      navigate("confirmation");
+
+    } catch (error) {
+      console.error(
+        "Booking API error:",
+        error
+      );
+
+      alert(
+        `Booking failed: ${
+          error.message || "Please try again."
+        }`
+      );
+    }
   };
 
   /* ================= CANCEL BOOKING ================= */
