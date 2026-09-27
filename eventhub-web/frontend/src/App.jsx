@@ -22,11 +22,11 @@ function App() {
   const [selectedSeats, setSelectedSeats] = useState([]);
 
   const [currentUser, setCurrentUser] = useState(() => {
-    const saved = localStorage.getItem("eventhubUser");
-
     try {
+      const saved = localStorage.getItem("eventhubUser");
       return saved ? JSON.parse(saved) : null;
-    } catch {
+    } catch (error) {
+      console.error("Unable to load saved user:", error);
       return null;
     }
   });
@@ -53,7 +53,10 @@ function App() {
     window.addEventListener("hashchange", changeRoute);
 
     return () => {
-      window.removeEventListener("hashchange", changeRoute);
+      window.removeEventListener(
+        "hashchange",
+        changeRoute
+      );
     };
   }, []);
 
@@ -71,7 +74,6 @@ function App() {
     }
 
     window.location.hash = `/${page}`;
-
     setRoute(page);
 
     window.scrollTo({
@@ -119,6 +121,8 @@ function App() {
 
     setCurrentUser(null);
     setBookings([]);
+    setSelectedEvent(null);
+    setSelectedSeats([]);
 
     navigate("home");
   };
@@ -130,9 +134,9 @@ function App() {
   const getUserId = () => {
     return Number(
       currentUser?.id ??
-        currentUser?.userId ??
-        currentUser?.user_id ??
-        0
+      currentUser?.userId ??
+      currentUser?.user_id ??
+      0
     );
   };
 
@@ -143,7 +147,7 @@ function App() {
   const confirmBooking = async (event, seats) => {
     try {
       /* -------------------------------------------------
-         STEP 1: BASIC VALIDATION
+         BASIC VALIDATION
       ------------------------------------------------- */
 
       if (!event) {
@@ -164,15 +168,11 @@ function App() {
         return;
       }
 
-      /* -------------------------------------------------
-         STEP 2: EVENT ID
-      ------------------------------------------------- */
-
       const eventId = Number(
         event?.id ??
-          event?.eventId ??
-          event?.event_id ??
-          0
+        event?.eventId ??
+        event?.event_id ??
+        0
       );
 
       if (!eventId) {
@@ -184,12 +184,12 @@ function App() {
       console.log("BOOKING STARTED");
       console.log("User ID:", userId);
       console.log("Event ID:", eventId);
-      console.log("Selected seats received:", seats);
+      console.log("Raw selected seats:", seats);
       console.log("=================================");
 
       /* -------------------------------------------------
-         STEP 3:
-         LOAD ACTUAL SEATS FROM JAVA BACKEND
+         STEP 1
+         LOAD SEATS FROM JAVA BACKEND
       ------------------------------------------------- */
 
       const seatResponse = await fetch(
@@ -217,31 +217,38 @@ function App() {
       }
 
       /* -------------------------------------------------
-         STEP 4:
+         STEP 2
          NORMALIZE BACKEND SEAT DATA
       ------------------------------------------------- */
 
       const backendSeats =
-        backendSeatsRaw.map((seat) => ({
-          id:
-            seat?.id ??
-            seat?.seatId ??
-            seat?.seat_id,
+        backendSeatsRaw
+          .map((seat) => ({
+            id:
+              seat?.id ??
+              seat?.seatId ??
+              seat?.seat_id ??
+              null,
 
-          eventId:
-            seat?.eventId ??
-            seat?.event_id ??
-            eventId,
+            eventId:
+              seat?.eventId ??
+              seat?.event_id ??
+              eventId,
 
-          seatNumber:
-            seat?.seatNumber ??
-            seat?.seat_number ??
-            "",
+            seatNumber:
+              seat?.seatNumber ??
+              seat?.seat_number ??
+              "",
 
-          status:
-            seat?.status ??
-            "AVAILABLE",
-        }));
+            status:
+              seat?.status ??
+              "AVAILABLE",
+          }))
+          .filter(
+            (seat) =>
+              seat.id !== null &&
+              seat.seatNumber
+          );
 
       console.log(
         "Normalized backend seats:",
@@ -249,116 +256,181 @@ function App() {
       );
 
       /* -------------------------------------------------
-         STEP 5:
+         STEP 3
          NORMALIZE SELECTED SEATS
-         
-         SeatSelection may send:
-         
-         "A3"
-         
-         OR
-         
+
+         Supports BOTH:
+
+         "C5"
+
+         AND
+
          {
-           id: 23,
-           seatId: 23,
-           seatNumber: "A3",
+           id: 30,
+           seatId: 30,
+           seatNumber: "C5",
            status: "AVAILABLE"
          }
       ------------------------------------------------- */
 
-      const selectedSeatNumbers = seats
-        .map((seat) => {
-          if (typeof seat === "string") {
-            return seat.trim().toUpperCase();
-          }
+      const normalizedSelectedSeats =
+        seats
+          .map((seat) => {
+            if (typeof seat === "string") {
+              return {
+                seatNumber: seat
+                  .trim()
+                  .toUpperCase(),
+              };
+            }
 
-          if (
-            typeof seat === "object" &&
-            seat !== null
-          ) {
-            return String(
-              seat?.seatNumber ??
-                seat?.seat_number ??
-                ""
-            )
-              .trim()
-              .toUpperCase();
-          }
+            if (
+              seat &&
+              typeof seat === "object"
+            ) {
+              return {
+                id:
+                  seat.id ??
+                  seat.seatId ??
+                  seat.seat_id ??
+                  null,
 
-          return "";
-        })
-        .filter(Boolean);
+                seatNumber:
+                  seat.seatNumber ??
+                  seat.seat_number ??
+                  "",
+
+                eventId:
+                  seat.eventId ??
+                  seat.event_id ??
+                  eventId,
+
+                status:
+                  seat.status ??
+                  "AVAILABLE",
+              };
+            }
+
+            return {
+              seatNumber: "",
+            };
+          })
+          .filter(
+            (seat) =>
+              seat.seatNumber
+          );
 
       console.log(
-        "Normalized selected seat numbers:",
-        selectedSeatNumbers
+        "Normalized selected seats:",
+        normalizedSelectedSeats
       );
 
-      if (selectedSeatNumbers.length !== seats.length) {
+      if (
+        normalizedSelectedSeats.length !==
+        seats.length
+      ) {
+        alert(
+          "Unable to identify one or more selected seats."
+        );
+
         console.error(
-          "Could not normalize selected seats:",
+          "Original seats:",
           seats
         );
 
-        alert(
-          "Unable to identify the selected seats."
+        console.error(
+          "Normalized seats:",
+          normalizedSelectedSeats
         );
 
         return;
       }
 
       /* -------------------------------------------------
-         STEP 6:
-         FIND ACTUAL DATABASE SEAT OBJECTS
+         STEP 4
+         FIND EXACT DATABASE SEAT
+
+         IMPORTANT:
+         Always match by seatNumber + eventId.
+
+         Example:
+
+         C5 + Event 2
+         ->
+         ID 30
+
+         NOT B4 / ID 24.
       ------------------------------------------------- */
 
       const selectedSeatObjects =
-        selectedSeatNumbers.map(
-          (seatNumber) => {
-            return backendSeats.find(
-              (backendSeat) =>
-                String(
-                  backendSeat.seatNumber
-                )
-                  .trim()
-                  .toUpperCase() ===
-                seatNumber
+        normalizedSelectedSeats.map(
+          (selectedSeat) => {
+
+            const selectedNumber =
+              String(
+                selectedSeat.seatNumber
+              )
+                .trim()
+                .toUpperCase();
+
+            const foundSeat =
+              backendSeats.find(
+                (backendSeat) => {
+
+                  const backendNumber =
+                    String(
+                      backendSeat.seatNumber
+                    )
+                      .trim()
+                      .toUpperCase();
+
+                  const sameEvent =
+                    Number(
+                      backendSeat.eventId
+                    ) === Number(eventId);
+
+                  return (
+                    sameEvent &&
+                    backendNumber ===
+                      selectedNumber
+                  );
+                }
+              );
+
+            console.log(
+              "SEAT MAPPING:",
+              selectedNumber,
+              "=>",
+              foundSeat
             );
+
+            return foundSeat;
           }
         );
 
-      console.log(
-        "Selected backend seat objects:",
-        selectedSeatObjects
-      );
-
       /* -------------------------------------------------
-         STEP 7:
+         STEP 5
          CHECK MISSING SEATS
       ------------------------------------------------- */
 
-      const missingSeatNumbers =
-        selectedSeatNumbers.filter(
-          (seatNumber) => {
-            const exists =
-              backendSeats.some(
-                (backendSeat) =>
-                  String(
-                    backendSeat.seatNumber
-                  )
-                    .trim()
-                    .toUpperCase() ===
-                  seatNumber
-              );
-
-            return !exists;
-          }
+      const missingSeats =
+        normalizedSelectedSeats.filter(
+          (selectedSeat, index) =>
+            !selectedSeatObjects[index]
         );
 
-      if (missingSeatNumbers.length > 0) {
+      if (missingSeats.length > 0) {
+
+        const missingNames =
+          missingSeats.map(
+            (seat) =>
+              seat.seatNumber ||
+              "Unknown"
+          );
+
         console.error(
           "Missing seats:",
-          missingSeatNumbers
+          missingSeats
         );
 
         console.error(
@@ -367,7 +439,7 @@ function App() {
         );
 
         alert(
-          `Unable to identify the selected seats: ${missingSeatNumbers.join(
+          `Unable to identify the selected seats: ${missingNames.join(
             ", "
           )}`
         );
@@ -376,37 +448,34 @@ function App() {
       }
 
       /* -------------------------------------------------
-         STEP 8:
-         CHECK SEAT IDs
+         STEP 6
+         VERIFY EVENT ID
       ------------------------------------------------- */
 
-      const invalidSeatObjects =
+      const wrongEventSeats =
         selectedSeatObjects.filter(
           (seat) =>
-            !seat ||
-            !Number(
-              seat.id ??
-                seat.seatId ??
-                seat.seat_id
-            )
+            Number(seat.eventId) !==
+            Number(eventId)
         );
 
-      if (invalidSeatObjects.length > 0) {
+      if (wrongEventSeats.length > 0) {
+
         console.error(
-          "Invalid backend seat objects:",
-          invalidSeatObjects
+          "Wrong event seats:",
+          wrongEventSeats
         );
 
         alert(
-          "Unable to identify the database seat IDs."
+          "One or more selected seats belong to another event."
         );
 
         return;
       }
 
       /* -------------------------------------------------
-         STEP 9:
-         CHECK SEAT AVAILABILITY
+         STEP 7
+         VERIFY AVAILABILITY
       ------------------------------------------------- */
 
       const unavailableSeats =
@@ -414,10 +483,12 @@ function App() {
           (seat) =>
             String(
               seat.status
-            ).toUpperCase() !== "AVAILABLE"
+            ).toUpperCase() !==
+            "AVAILABLE"
         );
 
       if (unavailableSeats.length > 0) {
+
         const names =
           unavailableSeats.map(
             (seat) =>
@@ -425,7 +496,7 @@ function App() {
           );
 
         alert(
-          `These seats are not available: ${names.join(
+          `These seats are no longer available: ${names.join(
             ", "
           )}`
         );
@@ -434,8 +505,8 @@ function App() {
       }
 
       /* -------------------------------------------------
-         STEP 10:
-         CONVERT TO DATABASE SEAT IDs
+         STEP 8
+         GET ACTUAL DATABASE SEAT IDS
       ------------------------------------------------- */
 
       const seatIds =
@@ -443,46 +514,100 @@ function App() {
           (seat) =>
             Number(
               seat.id ??
-                seat.seatId ??
-                seat.seat_id
+              seat.seatId ??
+              0
             )
         );
 
-      console.log(
-        "================================="
+      /* -------------------------------------------------
+         FINAL VALIDATION
+      ------------------------------------------------- */
+
+      if (
+        seatIds.length !==
+        normalizedSelectedSeats.length
+      ) {
+        alert(
+          "Unable to identify the selected seat IDs."
+        );
+
+        console.error(
+          "Seat objects:",
+          selectedSeatObjects
+        );
+
+        console.error(
+          "Seat IDs:",
+          seatIds
+        );
+
+        return;
+      }
+
+      if (
+        seatIds.some(
+          (id) =>
+            !Number.isInteger(id) ||
+            id <= 0
+        )
+      ) {
+        alert(
+          "Invalid seat information received from backend."
+        );
+
+        console.error(
+          "Invalid seat IDs:",
+          seatIds
+        );
+
+        return;
+      }
+
+      /* -------------------------------------------------
+         IMPORTANT DEBUG
+
+         Example:
+
+         C5 -> 30
+         B4 -> 24
+      ------------------------------------------------- */
+
+      console.log("=================================");
+      console.log("FINAL SEAT MAPPING");
+
+      selectedSeatObjects.forEach(
+        (seat) => {
+          console.log(
+            `${seat.seatNumber} -> DB ID ${seat.id} -> ${seat.status}`
+          );
+        }
       );
 
       console.log(
-        "FINAL DATABASE SEAT IDS:",
+        "Seat IDs being sent:",
         seatIds
       );
 
-      console.log(
-        "FINAL SEAT NUMBERS:",
-        selectedSeatNumbers
-      );
-
-      console.log(
-        "================================="
-      );
+      console.log("=================================");
 
       /* -------------------------------------------------
-         STEP 11:
+         STEP 9
          CALCULATE PRICE
       ------------------------------------------------- */
 
       const price = Number(
         event?.ticketPrice ??
-          event?.price ??
-          150
+        event?.price ??
+        150
       );
 
       const totalAmount =
-        selectedSeatNumbers.length * price;
+        normalizedSelectedSeats.length *
+        price;
 
       /* -------------------------------------------------
-         STEP 12:
-         CREATE BOOKING PAYLOAD
+         STEP 10
+         BOOKING PAYLOAD
       ------------------------------------------------- */
 
       const bookingPayload = {
@@ -493,12 +618,12 @@ function App() {
       };
 
       console.log(
-        "Sending booking payload:",
+        "BOOKING PAYLOAD:",
         bookingPayload
       );
 
       /* -------------------------------------------------
-         STEP 13:
+         STEP 11
          POST TO JAVA BACKEND
       ------------------------------------------------- */
 
@@ -529,80 +654,48 @@ function App() {
       }
 
       console.log(
-        "Booking response:",
+        "BOOKING RESPONSE:",
         bookingData
       );
 
-      /* -------------------------------------------------
-         STEP 14:
-         CHECK BACKEND RESPONSE
-      ------------------------------------------------- */
-
       if (!bookingResponse.ok) {
+
         throw new Error(
           bookingData?.message ||
-            `Booking failed (${bookingResponse.status})`
+          `Booking failed (${bookingResponse.status})`
         );
       }
 
       if (
         bookingData?.status &&
-        bookingData.status !== "success"
+        bookingData.status !==
+          "success"
       ) {
         throw new Error(
           bookingData?.message ||
-            "Booking failed."
+          "Booking was not confirmed."
         );
       }
 
       /* -------------------------------------------------
-         STEP 15:
-         SAVE BOOKING DATA
-      ------------------------------------------------- */
-
-      setSelectedEvent(event);
-
-      /*
-       * Store seat numbers for confirmation page.
-       */
-      setSelectedSeats(
-        selectedSeatNumbers
-      );
-
-      /* -------------------------------------------------
-         STEP 16:
+         STEP 12
          SUCCESS
       ------------------------------------------------- */
 
-      console.log(
-        "================================="
-      );
+      const confirmedSeatNumbers =
+        selectedSeatObjects.map(
+          (seat) =>
+            seat.seatNumber
+        );
 
-      console.log(
-        "BOOKING SUCCESSFUL"
-      );
+      setSelectedEvent(event);
 
-      console.log(
-        "Booking ID:",
-        bookingData?.bookingId
-      );
-
-      console.log(
-        "Seat IDs:",
-        seatIds
-      );
-
-      console.log(
-        "Seats:",
-        selectedSeatNumbers
-      );
-
-      console.log(
-        "================================="
+      setSelectedSeats(
+        confirmedSeatNumbers
       );
 
       alert(
-        `Booking confirmed!\nSeats: ${selectedSeatNumbers.join(
+        `Booking confirmed successfully!\n\nSeats: ${confirmedSeatNumbers.join(
           ", "
         )}`
       );
@@ -610,6 +703,7 @@ function App() {
       navigate("confirmation");
 
     } catch (error) {
+
       console.error(
         "================================="
       );
@@ -625,7 +719,7 @@ function App() {
 
       alert(
         error?.message ||
-          "Unable to complete booking."
+        "Unable to complete booking."
       );
     }
   };
@@ -636,6 +730,7 @@ function App() {
 
   const cancelBooking = async (bookingId) => {
     try {
+
       const userId = getUserId();
 
       if (!userId) {
@@ -643,8 +738,21 @@ function App() {
         return false;
       }
 
+      if (!bookingId) {
+        alert("Invalid booking ID.");
+        return false;
+      }
+
       console.log(
-        "Cancelling booking:",
+        "================================="
+      );
+
+      console.log(
+        "CANCELLING BOOKING"
+      );
+
+      console.log(
+        "Booking ID:",
         bookingId
       );
 
@@ -653,11 +761,19 @@ function App() {
         userId
       );
 
+      console.log(
+        "================================="
+      );
+
       const response =
         await fetch(
           `${API_BASE_URL}/api/bookings/${bookingId}?userId=${userId}`,
           {
             method: "DELETE",
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
           }
         );
 
@@ -675,26 +791,45 @@ function App() {
       );
 
       if (!response.ok) {
+
         throw new Error(
           data?.message ||
-            `Unable to cancel booking (${response.status})`
+          `Unable to cancel booking (${response.status})`
         );
       }
+
+      if (
+        data?.status &&
+        data.status !== "success"
+      ) {
+        throw new Error(
+          data?.message ||
+          "Booking cancellation failed."
+        );
+      }
+
+      /* -------------------------------------------------
+         REMOVE CANCELLED BOOKING FROM LOCAL STATE
+      ------------------------------------------------- */
+
+      setBookings((previousBookings) =>
+        previousBookings.filter(
+          (booking) =>
+            Number(
+              booking?.id ??
+              booking?.bookingId
+            ) !== Number(bookingId)
+        )
+      );
 
       alert(
         "Booking cancelled successfully."
       );
 
-      /*
-       * Refresh bookings page.
-       */
-      window.dispatchEvent(
-        new Event("bookingUpdated")
-      );
-
       return true;
 
     } catch (error) {
+
       console.error(
         "CANCEL ERROR:",
         error
@@ -702,7 +837,7 @@ function App() {
 
       alert(
         error?.message ||
-          "Unable to cancel booking."
+        "Unable to cancel booking."
       );
 
       return false;
@@ -727,6 +862,7 @@ function App() {
   ===================================================== */
 
   switch (route) {
+
     case "home":
       return (
         <Home
@@ -811,3 +947,4 @@ function App() {
 }
 
 export default App;
+
