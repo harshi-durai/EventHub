@@ -1,4 +1,3 @@
-
 import React, { useEffect, useMemo, useState } from "react";
 import "./SeatSelection.css";
 
@@ -14,20 +13,48 @@ function SeatSelection({
   onNavigate,
 }) {
   /*
-   * selected contains seat numbers:
+   * UI selected seats are ALWAYS stored as seat numbers:
+   *
    * ["A1", "A2", "A5"]
    *
-   * backendSeats contains complete backend objects:
+   * Backend seats are objects:
+   *
    * {
    *   id: 31,
    *   eventId: 3,
-   *   seatNumber: "A1",
+   *   seatNumber: "A5",
    *   status: "AVAILABLE"
    * }
    */
 
+  const normalizeSelectedSeats = (seats) => {
+    if (!Array.isArray(seats)) {
+      return [];
+    }
+
+    return seats
+      .map((seat) => {
+        // Already a seat number
+        if (typeof seat === "string") {
+          return seat;
+        }
+
+        // Backend seat object
+        if (seat && typeof seat === "object") {
+          return (
+            seat.seatNumber ??
+            seat.seat_number ??
+            null
+          );
+        }
+
+        return null;
+      })
+      .filter(Boolean);
+  };
+
   const [selected, setSelected] = useState(
-    Array.isArray(selectedSeats) ? selectedSeats : []
+    normalizeSelectedSeats(selectedSeats)
   );
 
   const [backendSeats, setBackendSeats] = useState([]);
@@ -85,46 +112,51 @@ function SeatSelection({
 
         const data = await response.json();
 
-        console.log(
-          "Backend seats:",
-          data
-        );
+        console.log("Raw backend seats:", data);
 
         /*
-         * Normalize backend response.
+         * Backend normally returns an array.
+         * Also support:
          *
-         * Supports:
-         * eventId
-         * event_id
-         *
-         * seatNumber
-         * seat_number
+         * { seats: [...] }
          */
 
-        const normalizedSeats = Array.isArray(data)
-          ? data.map((seat) => ({
-              id:
-                seat.id ??
-                seat.seatId ??
-                seat.seat_id,
-
-              eventId:
-                seat.eventId ??
-                seat.event_id ??
-                eventId,
-
-              seatNumber:
-                seat.seatNumber ??
-                seat.seat_number,
-
-              status:
-                seat.status ??
-                "AVAILABLE",
-            }))
+        const rawSeats = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.seats)
+          ? data.seats
           : [];
 
+        const normalizedSeats = rawSeats
+          .map((seat) => ({
+            id:
+              seat?.id ??
+              seat?.seatId ??
+              seat?.seat_id ??
+              null,
+
+            eventId:
+              seat?.eventId ??
+              seat?.event_id ??
+              eventId,
+
+            seatNumber:
+              seat?.seatNumber ??
+              seat?.seat_number ??
+              null,
+
+            status:
+              seat?.status ??
+              "AVAILABLE",
+          }))
+          .filter(
+            (seat) =>
+              seat.id !== null &&
+              seat.seatNumber !== null
+          );
+
         console.log(
-          "Normalized seats:",
+          "Normalized backend seats:",
           normalizedSeats
         );
 
@@ -151,6 +183,16 @@ function SeatSelection({
   }, [eventId]);
 
   /* =====================================================
+     RESET / NORMALIZE SELECTED SEATS
+  ===================================================== */
+
+  useEffect(() => {
+    setSelected(
+      normalizeSelectedSeats(selectedSeats)
+    );
+  }, [selectedSeats]);
+
+  /* =====================================================
      BOOKED SEATS
   ===================================================== */
 
@@ -161,7 +203,9 @@ function SeatSelection({
           String(seat.status).toUpperCase() ===
           "BOOKED"
       )
-      .map((seat) => seat.seatNumber);
+      .map((seat) =>
+        String(seat.seatNumber).toUpperCase()
+      );
   }, [backendSeats]);
 
   /* =====================================================
@@ -175,7 +219,9 @@ function SeatSelection({
           String(seat.status).toUpperCase() ===
           "AVAILABLE"
       )
-      .map((seat) => seat.seatNumber);
+      .map((seat) =>
+        String(seat.seatNumber).toUpperCase()
+      );
   }, [backendSeats]);
 
   /* =====================================================
@@ -183,10 +229,19 @@ function SeatSelection({
   ===================================================== */
 
   const findBackendSeat = (seatNumber) => {
+    if (!seatNumber) {
+      return null;
+    }
+
+    const normalizedSeatNumber =
+      String(seatNumber).toUpperCase();
+
     return backendSeats.find(
       (seat) =>
-        String(seat.seatNumber).toUpperCase() ===
-        String(seatNumber).toUpperCase()
+        String(
+          seat.seatNumber
+        ).toUpperCase() ===
+        normalizedSeatNumber
     );
   };
 
@@ -195,55 +250,51 @@ function SeatSelection({
   ===================================================== */
 
   const toggleSeat = (seatNumber) => {
-    const backendSeat =
-      findBackendSeat(seatNumber);
+    const normalizedSeatNumber =
+      String(seatNumber).toUpperCase();
 
-    /*
-     * Seat doesn't exist in backend.
-     */
+    const backendSeat =
+      findBackendSeat(normalizedSeatNumber);
+
     if (!backendSeat) {
       alert(
-        `Seat ${seatNumber} is not available in the backend.`
+        `Seat ${normalizedSeatNumber} is not configured in the backend.`
       );
       return;
     }
 
-    /*
-     * Already booked.
-     */
-    if (
-      String(backendSeat.status).toUpperCase() ===
-      "BOOKED"
-    ) {
+    const status =
+      String(
+        backendSeat.status
+      ).toUpperCase();
+
+    if (status === "BOOKED") {
       return;
     }
 
-    /*
-     * Only AVAILABLE seats can be selected.
-     */
-    if (
-      String(backendSeat.status).toUpperCase() !==
-      "AVAILABLE"
-    ) {
+    if (status !== "AVAILABLE") {
       return;
     }
 
-    /*
-     * Remove selected seat.
-     */
-    if (selected.includes(seatNumber)) {
+    /* REMOVE */
+
+    if (
+      selected.includes(
+        normalizedSeatNumber
+      )
+    ) {
       setSelected(
         selected.filter(
-          (seat) => seat !== seatNumber
+          (seat) =>
+            seat !== normalizedSeatNumber
         )
       );
 
       return;
     }
 
-    /*
-     * Maximum 8 seats.
-     */
+    /* MAXIMUM 8 */
+
     if (selected.length >= 8) {
       alert(
         "You can select a maximum of 8 seats."
@@ -251,12 +302,11 @@ function SeatSelection({
       return;
     }
 
-    /*
-     * Add seat number.
-     */
+    /* ADD */
+
     setSelected([
       ...selected,
-      seatNumber,
+      normalizedSeatNumber,
     ]);
   };
 
@@ -277,10 +327,28 @@ function SeatSelection({
       return;
     }
 
+    console.log(
+      "Selected seat numbers:",
+      selected
+    );
+
     /*
-     * Convert selected seat numbers into
-     * complete backend seat objects.
+     * Convert:
+     *
+     * ["A3", "A4"]
+     *
+     * INTO:
+     *
+     * [
+     *   {
+     *     id: 23,
+     *     eventId: 2,
+     *     seatNumber: "A3",
+     *     status: "AVAILABLE"
+     *   }
+     * ]
      */
+
     const selectedSeatObjects =
       selected
         .map((seatNumber) =>
@@ -289,18 +357,12 @@ function SeatSelection({
         .filter(Boolean);
 
     console.log(
-      "Selected seat numbers:",
-      selected
-    );
-
-    console.log(
-      "Selected backend seats:",
+      "Selected backend seat objects:",
       selectedSeatObjects
     );
 
-    /*
-     * Make sure every selected seat exists.
-     */
+    /* CHECK MISSING */
+
     if (
       selectedSeatObjects.length !==
       selected.length
@@ -317,16 +379,22 @@ function SeatSelection({
         )}`
       );
 
+      console.error(
+        "Missing backend seats:",
+        missingSeats
+      );
+
       return;
     }
 
-    /*
-     * Final BOOKED check.
-     */
+    /* CHECK AVAILABILITY */
+
     const unavailableSelected =
       selectedSeatObjects.filter(
         (seat) =>
-          String(seat.status).toUpperCase() !==
+          String(
+            seat.status
+          ).toUpperCase() !==
           "AVAILABLE"
       );
 
@@ -335,7 +403,10 @@ function SeatSelection({
     ) {
       alert(
         `These seats are no longer available: ${unavailableSelected
-          .map((seat) => seat.seatNumber)
+          .map(
+            (seat) =>
+              seat.seatNumber
+          )
           .join(", ")}`
       );
 
@@ -343,35 +414,40 @@ function SeatSelection({
     }
 
     /*
-     * IMPORTANT
+     * Send COMPLETE backend seat objects.
      *
-     * Pass seat numbers to the existing App.jsx
-     * booking system, but attach backend seat
-     * information as an additional property.
+     * App.jsx can now extract:
      *
-     * This keeps your existing UI compatible.
+     * seat.id
+     * seat.seatId
+     * seat.seatNumber
+     * seat.eventId
      */
+
     const seatsForBooking =
       selectedSeatObjects.map(
         (seat) => ({
           id: seat.id,
+
           seatId: seat.id,
+
           eventId:
-            seat.eventId ?? eventId,
+            seat.eventId ??
+            eventId,
+
           seatNumber:
             seat.seatNumber,
+
           status:
             seat.status,
         })
       );
 
-    /*
-     * Store a compatible representation.
-     *
-     * The first argument remains the event.
-     * The second argument is now the complete
-     * seat information.
-     */
+    console.log(
+      "Sending seats for booking:",
+      seatsForBooking
+    );
+
     if (confirmBooking) {
       confirmBooking(
         selectedEvent,
@@ -385,10 +461,11 @@ function SeatSelection({
   ===================================================== */
 
   const totalAmount =
-    selected.length * ticketPrice;
+    selected.length *
+    ticketPrice;
 
   /* =====================================================
-     EVENT DISPLAY DATA
+     EVENT DISPLAY
   ===================================================== */
 
   const eventTitle =
@@ -413,9 +490,7 @@ function SeatSelection({
   return (
     <div className="seat-page">
 
-      {/* =================================================
-          HEADER
-      ================================================= */}
+      {/* HEADER */}
 
       <header className="seat-header">
 
@@ -447,15 +522,11 @@ function SeatSelection({
 
       </header>
 
-      {/* =================================================
-          MAIN
-      ================================================= */}
+      {/* MAIN */}
 
       <main className="seat-main">
 
-        {/* =================================================
-            EVENT INFORMATION
-        ================================================= */}
+        {/* EVENT INFORMATION */}
 
         <section className="seat-event-info">
 
@@ -491,9 +562,7 @@ function SeatSelection({
 
         </section>
 
-        {/* =================================================
-            ERROR
-        ================================================= */}
+        {/* ERROR */}
 
         {seatError && (
           <div className="seat-error">
@@ -509,9 +578,7 @@ function SeatSelection({
           </div>
         )}
 
-        {/* =================================================
-            LOADING
-        ================================================= */}
+        {/* LOADING */}
 
         {loadingSeats ? (
 
@@ -531,10 +598,6 @@ function SeatSelection({
 
         ) : (
 
-          /* =================================================
-             SEAT AREA
-          ================================================= */
-
           <section className="seat-layout">
 
             {/* SCREEN */}
@@ -551,9 +614,7 @@ function SeatSelection({
 
             </div>
 
-            {/* =================================================
-                SEAT MAP
-            ================================================= */}
+            {/* SEAT MAP */}
 
             <div className="seat-map">
 
@@ -689,9 +750,7 @@ function SeatSelection({
 
             </div>
 
-            {/* =================================================
-                LEGEND
-            ================================================= */}
+            {/* LEGEND */}
 
             <div className="seat-legend">
 
@@ -716,9 +775,7 @@ function SeatSelection({
 
         )}
 
-        {/* =================================================
-            BOOKING SUMMARY
-        ================================================= */}
+        {/* BOOKING SUMMARY */}
 
         <section className="booking-summary">
 
