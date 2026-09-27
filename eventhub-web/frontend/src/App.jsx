@@ -23,7 +23,12 @@ function App() {
 
   const [currentUser, setCurrentUser] = useState(() => {
     const saved = localStorage.getItem("eventhubUser");
-    return saved ? JSON.parse(saved) : null;
+
+    try {
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
   });
 
   const [bookings, setBookings] = useState([]);
@@ -66,6 +71,7 @@ function App() {
     }
 
     window.location.hash = `/${page}`;
+
     setRoute(page);
 
     window.scrollTo({
@@ -124,9 +130,9 @@ function App() {
   const getUserId = () => {
     return Number(
       currentUser?.id ??
-      currentUser?.userId ??
-      currentUser?.user_id ??
-      0
+        currentUser?.userId ??
+        currentUser?.user_id ??
+        0
     );
   };
 
@@ -136,12 +142,16 @@ function App() {
 
   const confirmBooking = async (event, seats) => {
     try {
+      /* -------------------------------------------------
+         STEP 1: BASIC VALIDATION
+      ------------------------------------------------- */
+
       if (!event) {
         alert("Please select an event.");
         return;
       }
 
-      if (!seats || seats.length === 0) {
+      if (!Array.isArray(seats) || seats.length === 0) {
         alert("Please select at least one seat.");
         return;
       }
@@ -154,10 +164,15 @@ function App() {
         return;
       }
 
+      /* -------------------------------------------------
+         STEP 2: EVENT ID
+      ------------------------------------------------- */
+
       const eventId = Number(
         event?.id ??
-        event?.eventId ??
-        0
+          event?.eventId ??
+          event?.event_id ??
+          0
       );
 
       if (!eventId) {
@@ -169,13 +184,13 @@ function App() {
       console.log("BOOKING STARTED");
       console.log("User ID:", userId);
       console.log("Event ID:", eventId);
-      console.log("Selected seats:", seats);
+      console.log("Selected seats received:", seats);
       console.log("=================================");
 
-      /* -----------------------------------------------
-         STEP 1:
-         Get actual seat IDs from Java backend
-      ------------------------------------------------ */
+      /* -------------------------------------------------
+         STEP 3:
+         LOAD ACTUAL SEATS FROM JAVA BACKEND
+      ------------------------------------------------- */
 
       const seatResponse = await fetch(
         `${API_BASE_URL}/api/events/${eventId}/seats`
@@ -187,49 +202,163 @@ function App() {
         );
       }
 
-      const backendSeats = await seatResponse.json();
+      const backendSeatsRaw =
+        await seatResponse.json();
 
       console.log(
         "Backend seats:",
+        backendSeatsRaw
+      );
+
+      if (!Array.isArray(backendSeatsRaw)) {
+        throw new Error(
+          "Invalid seat data received from backend."
+        );
+      }
+
+      /* -------------------------------------------------
+         STEP 4:
+         NORMALIZE BACKEND SEAT DATA
+      ------------------------------------------------- */
+
+      const backendSeats =
+        backendSeatsRaw.map((seat) => ({
+          id:
+            seat?.id ??
+            seat?.seatId ??
+            seat?.seat_id,
+
+          eventId:
+            seat?.eventId ??
+            seat?.event_id ??
+            eventId,
+
+          seatNumber:
+            seat?.seatNumber ??
+            seat?.seat_number ??
+            "",
+
+          status:
+            seat?.status ??
+            "AVAILABLE",
+        }));
+
+      console.log(
+        "Normalized backend seats:",
         backendSeats
       );
 
-      /* -----------------------------------------------
-         STEP 2:
-         Convert A3, A5 etc. → database seat IDs
-      ------------------------------------------------ */
+      /* -------------------------------------------------
+         STEP 5:
+         NORMALIZE SELECTED SEATS
+         
+         SeatSelection may send:
+         
+         "A3"
+         
+         OR
+         
+         {
+           id: 23,
+           seatId: 23,
+           seatNumber: "A3",
+           status: "AVAILABLE"
+         }
+      ------------------------------------------------- */
 
-      const selectedSeatObjects = seats.map(
-        (seatNumber) => {
+      const selectedSeatNumbers = seats
+        .map((seat) => {
+          if (typeof seat === "string") {
+            return seat.trim().toUpperCase();
+          }
 
-          const foundSeat =
-            backendSeats.find(
-              (seat) =>
-                String(
-                  seat.seatNumber
-                ).toUpperCase() ===
-                String(
-                  seatNumber
-                ).toUpperCase()
-            );
+          if (
+            typeof seat === "object" &&
+            seat !== null
+          ) {
+            return String(
+              seat?.seatNumber ??
+                seat?.seat_number ??
+                ""
+            )
+              .trim()
+              .toUpperCase();
+          }
 
-          return foundSeat;
-        }
+          return "";
+        })
+        .filter(Boolean);
+
+      console.log(
+        "Normalized selected seat numbers:",
+        selectedSeatNumbers
       );
 
-      const missingSeats =
-        selectedSeatObjects.filter(
-          (seat) => !seat
+      if (selectedSeatNumbers.length !== seats.length) {
+        console.error(
+          "Could not normalize selected seats:",
+          seats
         );
 
-      if (missingSeats.length > 0) {
         alert(
           "Unable to identify the selected seats."
         );
 
+        return;
+      }
+
+      /* -------------------------------------------------
+         STEP 6:
+         FIND ACTUAL DATABASE SEAT OBJECTS
+      ------------------------------------------------- */
+
+      const selectedSeatObjects =
+        selectedSeatNumbers.map(
+          (seatNumber) => {
+            return backendSeats.find(
+              (backendSeat) =>
+                String(
+                  backendSeat.seatNumber
+                )
+                  .trim()
+                  .toUpperCase() ===
+                seatNumber
+            );
+          }
+        );
+
+      console.log(
+        "Selected backend seat objects:",
+        selectedSeatObjects
+      );
+
+      /* -------------------------------------------------
+         STEP 7:
+         CHECK MISSING SEATS
+      ------------------------------------------------- */
+
+      const missingSeatNumbers =
+        selectedSeatNumbers.filter(
+          (seatNumber) => {
+            const exists =
+              backendSeats.some(
+                (backendSeat) =>
+                  String(
+                    backendSeat.seatNumber
+                  )
+                    .trim()
+                    .toUpperCase() ===
+                  seatNumber
+              );
+
+            return !exists;
+          }
+        );
+
+      if (missingSeatNumbers.length > 0) {
         console.error(
-          "Selected seats:",
-          seats
+          "Missing seats:",
+          missingSeatNumbers
         );
 
         console.error(
@@ -237,20 +366,58 @@ function App() {
           backendSeats
         );
 
+        alert(
+          `Unable to identify the selected seats: ${missingSeatNumbers.join(
+            ", "
+          )}`
+        );
+
         return;
       }
+
+      /* -------------------------------------------------
+         STEP 8:
+         CHECK SEAT IDs
+      ------------------------------------------------- */
+
+      const invalidSeatObjects =
+        selectedSeatObjects.filter(
+          (seat) =>
+            !seat ||
+            !Number(
+              seat.id ??
+                seat.seatId ??
+                seat.seat_id
+            )
+        );
+
+      if (invalidSeatObjects.length > 0) {
+        console.error(
+          "Invalid backend seat objects:",
+          invalidSeatObjects
+        );
+
+        alert(
+          "Unable to identify the database seat IDs."
+        );
+
+        return;
+      }
+
+      /* -------------------------------------------------
+         STEP 9:
+         CHECK SEAT AVAILABILITY
+      ------------------------------------------------- */
 
       const unavailableSeats =
         selectedSeatObjects.filter(
           (seat) =>
             String(
               seat.status
-            ).toUpperCase() !==
-            "AVAILABLE"
+            ).toUpperCase() !== "AVAILABLE"
         );
 
       if (unavailableSeats.length > 0) {
-
         const names =
           unavailableSeats.map(
             (seat) =>
@@ -266,38 +433,57 @@ function App() {
         return;
       }
 
+      /* -------------------------------------------------
+         STEP 10:
+         CONVERT TO DATABASE SEAT IDs
+      ------------------------------------------------- */
+
       const seatIds =
         selectedSeatObjects.map(
           (seat) =>
             Number(
               seat.id ??
-              seat.seatId
+                seat.seatId ??
+                seat.seat_id
             )
         );
 
       console.log(
-        "Converted seat IDs:",
+        "================================="
+      );
+
+      console.log(
+        "FINAL DATABASE SEAT IDS:",
         seatIds
       );
 
-      /* -----------------------------------------------
-         STEP 3:
-         Calculate price
-      ------------------------------------------------ */
+      console.log(
+        "FINAL SEAT NUMBERS:",
+        selectedSeatNumbers
+      );
+
+      console.log(
+        "================================="
+      );
+
+      /* -------------------------------------------------
+         STEP 11:
+         CALCULATE PRICE
+      ------------------------------------------------- */
 
       const price = Number(
         event?.ticketPrice ??
-        event?.price ??
-        150
+          event?.price ??
+          150
       );
 
       const totalAmount =
-        seats.length * price;
+        selectedSeatNumbers.length * price;
 
-      /* -----------------------------------------------
-         STEP 4:
-         POST booking to Java backend
-      ------------------------------------------------ */
+      /* -------------------------------------------------
+         STEP 12:
+         CREATE BOOKING PAYLOAD
+      ------------------------------------------------- */
 
       const bookingPayload = {
         userId: userId,
@@ -307,9 +493,14 @@ function App() {
       };
 
       console.log(
-        "Sending booking:",
+        "Sending booking payload:",
         bookingPayload
       );
+
+      /* -------------------------------------------------
+         STEP 13:
+         POST TO JAVA BACKEND
+      ------------------------------------------------- */
 
       const bookingResponse =
         await fetch(
@@ -328,31 +519,90 @@ function App() {
           }
         );
 
-      const bookingData =
-        await bookingResponse.json();
+      let bookingData = null;
+
+      try {
+        bookingData =
+          await bookingResponse.json();
+      } catch {
+        bookingData = null;
+      }
 
       console.log(
         "Booking response:",
         bookingData
       );
 
+      /* -------------------------------------------------
+         STEP 14:
+         CHECK BACKEND RESPONSE
+      ------------------------------------------------- */
+
       if (!bookingResponse.ok) {
         throw new Error(
           bookingData?.message ||
-          "Booking failed"
+            `Booking failed (${bookingResponse.status})`
         );
       }
 
-      /* -----------------------------------------------
-         STEP 5:
-         Booking successful
-      ------------------------------------------------ */
+      if (
+        bookingData?.status &&
+        bookingData.status !== "success"
+      ) {
+        throw new Error(
+          bookingData?.message ||
+            "Booking failed."
+        );
+      }
+
+      /* -------------------------------------------------
+         STEP 15:
+         SAVE BOOKING DATA
+      ------------------------------------------------- */
 
       setSelectedEvent(event);
-      setSelectedSeats(seats);
+
+      /*
+       * Store seat numbers for confirmation page.
+       */
+      setSelectedSeats(
+        selectedSeatNumbers
+      );
+
+      /* -------------------------------------------------
+         STEP 16:
+         SUCCESS
+      ------------------------------------------------- */
+
+      console.log(
+        "================================="
+      );
+
+      console.log(
+        "BOOKING SUCCESSFUL"
+      );
+
+      console.log(
+        "Booking ID:",
+        bookingData?.bookingId
+      );
+
+      console.log(
+        "Seat IDs:",
+        seatIds
+      );
+
+      console.log(
+        "Seats:",
+        selectedSeatNumbers
+      );
+
+      console.log(
+        "================================="
+      );
 
       alert(
-        `Booking confirmed!\nSeats: ${seats.join(
+        `Booking confirmed!\nSeats: ${selectedSeatNumbers.join(
           ", "
         )}`
       );
@@ -360,15 +610,22 @@ function App() {
       navigate("confirmation");
 
     } catch (error) {
+      console.error(
+        "================================="
+      );
 
       console.error(
         "BOOKING ERROR:",
         error
       );
 
+      console.error(
+        "================================="
+      );
+
       alert(
-        error.message ||
-        "Unable to complete booking."
+        error?.message ||
+          "Unable to complete booking."
       );
     }
   };
@@ -378,21 +635,22 @@ function App() {
   ===================================================== */
 
   const cancelBooking = async (bookingId) => {
-
     try {
-
       const userId = getUserId();
 
       if (!userId) {
-        alert(
-          "Please login again."
-        );
+        alert("Please login again.");
         return false;
       }
 
       console.log(
         "Cancelling booking:",
         bookingId
+      );
+
+      console.log(
+        "User ID:",
+        userId
       );
 
       const response =
@@ -403,8 +661,13 @@ function App() {
           }
         );
 
-      const data =
-        await response.json();
+      let data = null;
+
+      try {
+        data = await response.json();
+      } catch {
+        data = null;
+      }
 
       console.log(
         "Cancel response:",
@@ -414,7 +677,7 @@ function App() {
       if (!response.ok) {
         throw new Error(
           data?.message ||
-          "Unable to cancel booking."
+            `Unable to cancel booking (${response.status})`
         );
       }
 
@@ -422,18 +685,24 @@ function App() {
         "Booking cancelled successfully."
       );
 
+      /*
+       * Refresh bookings page.
+       */
+      window.dispatchEvent(
+        new Event("bookingUpdated")
+      );
+
       return true;
 
     } catch (error) {
-
       console.error(
         "CANCEL ERROR:",
         error
       );
 
       alert(
-        error.message ||
-        "Unable to cancel booking."
+        error?.message ||
+          "Unable to cancel booking."
       );
 
       return false;
@@ -458,7 +727,6 @@ function App() {
   ===================================================== */
 
   switch (route) {
-
     case "home":
       return (
         <Home
