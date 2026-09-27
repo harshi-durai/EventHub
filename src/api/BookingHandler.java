@@ -3,52 +3,111 @@ package api;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
-
 import dao.BookingDAO;
 import dao.SeatDAO;
-import model.Booking;
-import model.Seat;
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import model.Booking;
+import model.Seat;
 
 public class BookingHandler implements HttpHandler {
 
-    private final BookingDAO bookingDAO = new BookingDAO();
-    private final SeatDAO seatDAO = new SeatDAO();
+    private final BookingDAO bookingDAO =
+            new BookingDAO();
+
+    private final SeatDAO seatDAO =
+            new SeatDAO();
 
     @Override
-    public void handle(HttpExchange exchange) throws IOException {
+    public void handle(
+            HttpExchange exchange)
+            throws IOException {
 
         addCorsHeaders(exchange);
 
-        if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
-            exchange.sendResponseHeaders(204, -1);
-            exchange.close();
-            return;
-        }
-
-        String path = exchange.getRequestURI().getPath();
-
-        // =====================================================
-        // POST /api/bookings
-        // =====================================================
-
         if (
-                "/api/bookings".equals(path)
-                        && "POST".equalsIgnoreCase(
+                "OPTIONS".equalsIgnoreCase(
                         exchange.getRequestMethod())
         ) {
 
-            handleCreateBooking(exchange);
+            exchange.sendResponseHeaders(
+                    204,
+                    -1
+            );
+
+            exchange.close();
+
             return;
         }
 
-        // =====================================================
-        // METHOD NOT ALLOWED
-        // =====================================================
+        String path =
+                exchange.getRequestURI()
+                        .getPath();
+
+        String method =
+                exchange.getRequestMethod();
+
+        /* =====================================================
+           POST /api/bookings
+        ===================================================== */
+
+        if (
+                "/api/bookings".equals(path)
+                        &&
+                "POST".equalsIgnoreCase(
+                        method)
+        ) {
+
+            handleCreateBooking(
+                    exchange
+            );
+
+            return;
+        }
+
+        /* =====================================================
+           GET /api/bookings?userId=1
+        ===================================================== */
+
+        if (
+                "/api/bookings".equals(path)
+                        &&
+                "GET".equalsIgnoreCase(
+                        method)
+        ) {
+
+            handleGetBookings(
+                    exchange
+            );
+
+            return;
+        }
+
+        /* =====================================================
+           DELETE /api/bookings/{id}?userId=1
+        ===================================================== */
+
+        if (
+                path.startsWith(
+                        "/api/bookings/"
+                )
+                        &&
+                "DELETE".equalsIgnoreCase(
+                        method)
+        ) {
+
+            handleCancelBooking(
+                    exchange
+            );
+
+            return;
+        }
+
+        /* =====================================================
+           METHOD NOT ALLOWED
+        ===================================================== */
 
         sendResponse(
                 exchange,
@@ -62,34 +121,64 @@ public class BookingHandler implements HttpHandler {
         );
     }
 
-    // =========================================================
-    // CREATE BOOKING
-    // =========================================================
+
+    /* =========================================================
+       CREATE BOOKING
+    ========================================================= */
 
     private void handleCreateBooking(
-            HttpExchange exchange) throws IOException {
+            HttpExchange exchange)
+            throws IOException {
 
         try {
 
-            String body = new String(
-                    exchange.getRequestBody().readAllBytes(),
-                    StandardCharsets.UTF_8
-            );
+            String body =
+                    new String(
+                            exchange
+                                    .getRequestBody()
+                                    .readAllBytes(),
+                            StandardCharsets.UTF_8
+                    );
 
             System.out.println();
-            System.out.println("Booking request received:");
-            System.out.println(body);
+            System.out.println(
+                    "================================="
+            );
+            System.out.println(
+                    "BOOKING REQUEST"
+            );
+            System.out.println(
+                    body
+            );
+            System.out.println(
+                    "================================="
+            );
 
-            int userId = getInt(body, "userId");
-            int eventId = getInt(body, "eventId");
-            double totalAmount = getDouble(body, "totalAmount");
+            int userId =
+                    getInt(
+                            body,
+                            "userId"
+                    );
+
+            int eventId =
+                    getInt(
+                            body,
+                            "eventId"
+                    );
+
+            double totalAmount =
+                    getDouble(
+                            body,
+                            "totalAmount"
+                    );
 
             List<Integer> seatIds =
                     getSeatIds(body);
 
-            // -------------------------------------------------
-            // Basic validation
-            // -------------------------------------------------
+
+            /* -------------------------------------------------
+               VALIDATION
+            ------------------------------------------------- */
 
             if (userId <= 0) {
 
@@ -107,6 +196,7 @@ public class BookingHandler implements HttpHandler {
                 return;
             }
 
+
             if (eventId <= 0) {
 
                 sendResponse(
@@ -122,6 +212,7 @@ public class BookingHandler implements HttpHandler {
 
                 return;
             }
+
 
             if (seatIds.isEmpty()) {
 
@@ -139,17 +230,25 @@ public class BookingHandler implements HttpHandler {
                 return;
             }
 
-            // -------------------------------------------------
-            // Load selected seats from database
-            // -------------------------------------------------
+
+            /* -------------------------------------------------
+               LOAD SEATS
+            ------------------------------------------------- */
 
             List<Seat> selectedSeats =
                     new ArrayList<>();
 
-            for (Integer seatId : seatIds) {
+
+            for (
+                    Integer seatId :
+                    seatIds
+            ) {
 
                 Seat seat =
-                        seatDAO.getSeatById(seatId);
+                        seatDAO.getSeatById(
+                                seatId
+                        );
+
 
                 if (seat == null) {
 
@@ -167,8 +266,11 @@ public class BookingHandler implements HttpHandler {
                     return;
                 }
 
-                // Make sure seat belongs to requested event
-                if (seat.getEventId() != eventId) {
+
+                if (
+                        seat.getEventId()
+                                != eventId
+                ) {
 
                     sendResponse(
                             exchange,
@@ -184,49 +286,75 @@ public class BookingHandler implements HttpHandler {
                     return;
                 }
 
-                // Make sure seat is available
-                if (!"AVAILABLE".equalsIgnoreCase(
-                        seat.getStatus())) {
+
+                if (
+                        !"AVAILABLE"
+                                .equalsIgnoreCase(
+                                        seat.getStatus()
+                                )
+                ) {
 
                     sendResponse(
                             exchange,
                             409,
-                            """
-                            {
-                              "status":"error",
-                              "message":"One or more selected seats are already booked"
-                            }
-                            """
+                            "{"
+                                    + "\"status\":\"error\","
+                                    + "\"message\":\"Seat "
+                                    + escape(
+                                            seat.getSeatNumber()
+                                    )
+                                    + " is already booked\""
+                                    + "}"
                     );
 
                     return;
                 }
 
-                selectedSeats.add(seat);
+
+                selectedSeats.add(
+                        seat
+                );
             }
 
-            // -------------------------------------------------
-            // Create Booking object
-            // -------------------------------------------------
+
+            /* -------------------------------------------------
+               CREATE BOOKING OBJECT
+            ------------------------------------------------- */
 
             Booking booking =
                     new Booking();
 
-            booking.setUserId(userId);
-            booking.setEventId(eventId);
-            booking.setTotalAmount(totalAmount);
-            booking.setStatus("CONFIRMED");
-            booking.setSeatIds(seatIds);
+            booking.setUserId(
+                    userId
+            );
 
-            // -------------------------------------------------
-            // Create booking using existing DAO
-            // -------------------------------------------------
+            booking.setEventId(
+                    eventId
+            );
+
+            booking.setTotalAmount(
+                    totalAmount
+            );
+
+            booking.setStatus(
+                    "CONFIRMED"
+            );
+
+            booking.setSeatIds(
+                    seatIds
+            );
+
+
+            /* -------------------------------------------------
+               SAVE BOOKING
+            ------------------------------------------------- */
 
             boolean success =
                     bookingDAO.createBooking(
                             booking,
                             selectedSeats
                     );
+
 
             if (!success) {
 
@@ -244,23 +372,18 @@ public class BookingHandler implements HttpHandler {
                 return;
             }
 
-            // -------------------------------------------------
-            // Get generated ticket
-            // -------------------------------------------------
 
             String ticketCode =
                     bookingDAO.getTicketCode(
                             booking.getId()
                     );
 
+
             String bookedSeats =
                     bookingDAO.getBookedSeats(
                             booking.getId()
                     );
 
-            // -------------------------------------------------
-            // Success response
-            // -------------------------------------------------
 
             String response =
                     "{"
@@ -279,21 +402,29 @@ public class BookingHandler implements HttpHandler {
                             + booking.getTotalAmount()
                             + ","
                             + "\"seats\":\""
-                            + escape(bookedSeats)
+                            + escape(
+                                    bookedSeats
+                            )
                             + "\","
                             + "\"ticketCode\":\""
-                            + escape(ticketCode)
+                            + escape(
+                                    ticketCode
+                            )
                             + "\","
                             + "\"bookingStatus\":\""
-                            + escape(booking.getStatus())
+                            + escape(
+                                    booking.getStatus()
+                            )
                             + "\""
                             + "}";
+
 
             sendResponse(
                     exchange,
                     200,
                     response
             );
+
 
         } catch (Exception e) {
 
@@ -316,59 +447,501 @@ public class BookingHandler implements HttpHandler {
         }
     }
 
-    // =========================================================
-    // GET INTEGER FROM JSON
-    // =========================================================
+
+    /* =========================================================
+       GET BOOKINGS
+       GET /api/bookings?userId=1
+    ========================================================= */
+
+    private void handleGetBookings(
+            HttpExchange exchange)
+            throws IOException {
+
+        try {
+
+            String query =
+                    exchange
+                            .getRequestURI()
+                            .getQuery();
+
+            int userId =
+                    getQueryInt(
+                            query,
+                            "userId"
+                    );
+
+
+            if (userId <= 0) {
+
+                sendResponse(
+                        exchange,
+                        400,
+                        """
+                        {
+                          "status":"error",
+                          "message":"Invalid user ID"
+                        }
+                        """
+                );
+
+                return;
+            }
+
+
+            List<Booking> bookings =
+                    bookingDAO.getBookingsByUser(
+                            userId
+                    );
+
+
+            StringBuilder response =
+                    new StringBuilder();
+
+            response.append(
+                    "{\"status\":\"success\",\"bookings\":["
+            );
+
+
+            for (
+                    int i = 0;
+                    i < bookings.size();
+                    i++
+            ) {
+
+                Booking booking =
+                        bookings.get(i);
+
+
+                String eventName =
+                        bookingDAO.getEventName(
+                                booking.getEventId()
+                        );
+
+
+                String eventDate =
+                        bookingDAO.getEventDate(
+                                booking.getEventId()
+                        );
+
+
+                String eventVenue =
+                        bookingDAO.getEventVenue(
+                                booking.getEventId()
+                        );
+
+
+                String seats =
+                        bookingDAO.getBookedSeats(
+                                booking.getId()
+                        );
+
+
+                String ticketCode =
+                        bookingDAO.getTicketCode(
+                                booking.getId()
+                        );
+
+
+                if (i > 0) {
+                    response.append(",");
+                }
+
+
+                response.append("{");
+
+                response.append(
+                        "\"id\":"
+                );
+
+                response.append(
+                        booking.getId()
+                );
+
+                response.append(",");
+
+                response.append(
+                        "\"userId\":"
+                );
+
+                response.append(
+                        booking.getUserId()
+                );
+
+                response.append(",");
+
+                response.append(
+                        "\"eventId\":"
+                );
+
+                response.append(
+                        booking.getEventId()
+                );
+
+                response.append(",");
+
+                response.append(
+                        "\"eventName\":\""
+                );
+
+                response.append(
+                        escape(eventName)
+                );
+
+                response.append(
+                        "\","
+                );
+
+                response.append(
+                        "\"eventDate\":\""
+                );
+
+                response.append(
+                        escape(eventDate)
+                );
+
+                response.append(
+                        "\","
+                );
+
+                response.append(
+                        "\"venue\":\""
+                );
+
+                response.append(
+                        escape(eventVenue)
+                );
+
+                response.append(
+                        "\","
+                );
+
+                response.append(
+                        "\"seats\":\""
+                );
+
+                response.append(
+                        escape(seats)
+                );
+
+                response.append(
+                        "\","
+                );
+
+                response.append(
+                        "\"ticketCode\":\""
+                );
+
+                response.append(
+                        escape(ticketCode)
+                );
+
+                response.append(
+                        "\","
+                );
+
+                response.append(
+                        "\"totalAmount\":"
+                );
+
+                response.append(
+                        booking.getTotalAmount()
+                );
+
+                response.append(",");
+
+                response.append(
+                        "\"status\":\""
+                );
+
+                response.append(
+                        escape(
+                                booking.getStatus()
+                        )
+                );
+
+                response.append(
+                        "\""
+                );
+
+                response.append("}");
+            }
+
+
+            response.append(
+                    "]}"
+            );
+
+
+            sendResponse(
+                    exchange,
+                    200,
+                    response.toString()
+            );
+
+
+        } catch (Exception e) {
+
+            System.out.println(
+                    "Unable to load bookings!"
+            );
+
+            e.printStackTrace();
+
+            sendResponse(
+                    exchange,
+                    500,
+                    """
+                    {
+                      "status":"error",
+                      "message":"Unable to load bookings"
+                    }
+                    """
+            );
+        }
+    }
+
+
+    /* =========================================================
+       CANCEL BOOKING
+       DELETE /api/bookings/{bookingId}?userId=1
+    ========================================================= */
+
+    private void handleCancelBooking(
+            HttpExchange exchange)
+            throws IOException {
+
+        try {
+
+            String path =
+                    exchange
+                            .getRequestURI()
+                            .getPath();
+
+
+            String bookingIdText =
+                    path.substring(
+                            "/api/bookings/"
+                                    .length()
+                    );
+
+
+            int bookingId;
+
+            try {
+
+                bookingId =
+                        Integer.parseInt(
+                                bookingIdText
+                        );
+
+            } catch (Exception e) {
+
+                sendResponse(
+                        exchange,
+                        400,
+                        """
+                        {
+                          "status":"error",
+                          "message":"Invalid booking ID"
+                        }
+                        """
+                );
+
+                return;
+            }
+
+
+            String query =
+                    exchange
+                            .getRequestURI()
+                            .getQuery();
+
+
+            int userId =
+                    getQueryInt(
+                            query,
+                            "userId"
+                    );
+
+
+            if (userId <= 0) {
+
+                sendResponse(
+                        exchange,
+                        400,
+                        """
+                        {
+                          "status":"error",
+                          "message":"Invalid user ID"
+                        }
+                        """
+                );
+
+                return;
+            }
+
+
+            System.out.println();
+            System.out.println(
+                    "================================="
+            );
+
+            System.out.println(
+                    "CANCEL BOOKING REQUEST"
+            );
+
+            System.out.println(
+                    "Booking ID: "
+                            + bookingId
+            );
+
+            System.out.println(
+                    "User ID: "
+                            + userId
+            );
+
+            System.out.println(
+                    "================================="
+            );
+
+
+            boolean success =
+                    bookingDAO.cancelBooking(
+                            bookingId,
+                            userId
+                    );
+
+
+            if (!success) {
+
+                sendResponse(
+                        exchange,
+                        409,
+                        """
+                        {
+                          "status":"error",
+                          "message":"Unable to cancel booking. It may already be cancelled or does not belong to this user."
+                        }
+                        """
+                );
+
+                return;
+            }
+
+
+            sendResponse(
+                    exchange,
+                    200,
+                    """
+                    {
+                      "status":"success",
+                      "message":"Booking cancelled successfully"
+                    }
+                    """
+            );
+
+
+        } catch (Exception e) {
+
+            System.out.println(
+                    "Cancellation API failed!"
+            );
+
+            e.printStackTrace();
+
+            sendResponse(
+                    exchange,
+                    500,
+                    """
+                    {
+                      "status":"error",
+                      "message":"Unable to cancel booking"
+                    }
+                    """
+            );
+        }
+    }
+
+
+    /* =========================================================
+       GET INTEGER FROM JSON
+    ========================================================= */
 
     private int getInt(
             String json,
             String key) {
 
         String value =
-                getValue(json, key);
+                getValue(
+                        json,
+                        key
+                );
+
 
         if (
                 value == null
-                        || value.isBlank()
+                        ||
+                value.isBlank()
         ) {
+
             return 0;
         }
 
+
         try {
-            return Integer.parseInt(value);
+
+            return Integer.parseInt(
+                    value
+            );
+
         } catch (Exception e) {
+
             return 0;
         }
     }
 
-    // =========================================================
-    // GET DOUBLE FROM JSON
-    // =========================================================
+
+    /* =========================================================
+       GET DOUBLE FROM JSON
+    ========================================================= */
 
     private double getDouble(
             String json,
             String key) {
 
         String value =
-                getValue(json, key);
+                getValue(
+                        json,
+                        key
+                );
+
 
         if (
                 value == null
-                        || value.isBlank()
+                        ||
+                value.isBlank()
         ) {
+
             return 0;
         }
 
+
         try {
-            return Double.parseDouble(value);
+
+            return Double.parseDouble(
+                    value
+            );
+
         } catch (Exception e) {
+
             return 0;
         }
     }
 
-    // =========================================================
-    // GET SEAT IDS
-    // =========================================================
+
+    /* =========================================================
+       GET SEAT IDS
+    ========================================================= */
 
     private List<Integer> getSeatIds(
             String json) {
@@ -376,12 +949,18 @@ public class BookingHandler implements HttpHandler {
         List<Integer> seatIds =
                 new ArrayList<>();
 
+
         int start =
-                json.indexOf("\"seatIds\"");
+                json.indexOf(
+                        "\"seatIds\""
+                );
+
 
         if (start == -1) {
+
             return seatIds;
         }
+
 
         int open =
                 json.indexOf(
@@ -389,18 +968,23 @@ public class BookingHandler implements HttpHandler {
                         start
                 );
 
+
         int close =
                 json.indexOf(
                         "]",
                         open
                 );
 
+
         if (
                 open == -1
-                        || close == -1
+                        ||
+                close == -1
         ) {
+
             return seatIds;
         }
+
 
         String array =
                 json.substring(
@@ -408,10 +992,15 @@ public class BookingHandler implements HttpHandler {
                         close
                 );
 
+
         String[] values =
                 array.split(",");
 
-        for (String value : values) {
+
+        for (
+                String value :
+                values
+        ) {
 
             try {
 
@@ -423,10 +1012,15 @@ public class BookingHandler implements HttpHandler {
                                         ""
                                 );
 
-                if (!clean.isBlank()) {
+
+                if (
+                        !clean.isBlank()
+                ) {
 
                     seatIds.add(
-                            Integer.parseInt(clean)
+                            Integer.parseInt(
+                                    clean
+                            )
                     );
                 }
 
@@ -434,12 +1028,14 @@ public class BookingHandler implements HttpHandler {
             }
         }
 
+
         return seatIds;
     }
 
-    // =========================================================
-    // GET SIMPLE JSON VALUE
-    // =========================================================
+
+    /* =========================================================
+       GET SIMPLE JSON VALUE
+    ========================================================= */
 
     private String getValue(
             String json,
@@ -448,12 +1044,20 @@ public class BookingHandler implements HttpHandler {
         String search =
                 "\"" + key + "\"";
 
-        int keyPosition =
-                json.indexOf(search);
 
-        if (keyPosition == -1) {
+        int keyPosition =
+                json.indexOf(
+                        search
+                );
+
+
+        if (
+                keyPosition == -1
+        ) {
+
             return null;
         }
+
 
         int colon =
                 json.indexOf(
@@ -461,27 +1065,39 @@ public class BookingHandler implements HttpHandler {
                         keyPosition
                 );
 
-        if (colon == -1) {
+
+        if (
+                colon == -1
+        ) {
+
             return null;
         }
+
 
         int start =
                 colon + 1;
 
+
         while (
                 start < json.length()
-                        && Character.isWhitespace(
-                        json.charAt(start))
+                        &&
+                Character.isWhitespace(
+                        json.charAt(start)
+                )
         ) {
+
             start++;
         }
 
+
         if (
                 start < json.length()
-                        && json.charAt(start) == '"'
+                        &&
+                json.charAt(start) == '"'
         ) {
 
             start++;
+
 
             int end =
                     json.indexOf(
@@ -489,9 +1105,14 @@ public class BookingHandler implements HttpHandler {
                             start
                     );
 
-            if (end == -1) {
+
+            if (
+                    end == -1
+            ) {
+
                 return null;
             }
+
 
             return json.substring(
                     start,
@@ -499,16 +1120,22 @@ public class BookingHandler implements HttpHandler {
             );
         }
 
+
         int end =
                 start;
 
+
         while (
                 end < json.length()
-                        && json.charAt(end) != ','
-                        && json.charAt(end) != '}'
+                        &&
+                json.charAt(end) != ','
+                        &&
+                json.charAt(end) != '}'
         ) {
+
             end++;
         }
+
 
         return json.substring(
                 start,
@@ -516,73 +1143,171 @@ public class BookingHandler implements HttpHandler {
         ).trim();
     }
 
-    // =========================================================
-    // CORS
-    // =========================================================
+
+    /* =========================================================
+       GET QUERY INTEGER
+    ========================================================= */
+
+    private int getQueryInt(
+            String query,
+            String key) {
+
+        if (
+                query == null
+                        ||
+                query.isBlank()
+        ) {
+
+            return 0;
+        }
+
+
+        String[] parameters =
+                query.split("&");
+
+
+        for (
+                String parameter :
+                parameters
+        ) {
+
+            String[] pair =
+                    parameter.split(
+                            "=",
+                            2
+                    );
+
+
+            if (
+                    pair.length == 2
+                            &&
+                    pair[0].equalsIgnoreCase(
+                            key
+                    )
+            ) {
+
+                try {
+
+                    return Integer.parseInt(
+                            pair[1]
+                    );
+
+                } catch (Exception e) {
+
+                    return 0;
+                }
+            }
+        }
+
+
+        return 0;
+    }
+
+
+    /* =========================================================
+       CORS
+    ========================================================= */
 
     private void addCorsHeaders(
             HttpExchange exchange) {
 
-        exchange.getResponseHeaders().set(
-                "Access-Control-Allow-Origin",
-                "*"
-        );
+        exchange
+                .getResponseHeaders()
+                .set(
+                        "Access-Control-Allow-Origin",
+                        "*"
+                );
 
-        exchange.getResponseHeaders().set(
-                "Access-Control-Allow-Methods",
-                "GET, POST, PUT, DELETE, OPTIONS"
-        );
 
-        exchange.getResponseHeaders().set(
-                "Access-Control-Allow-Headers",
-                "Content-Type"
-        );
+        exchange
+                .getResponseHeaders()
+                .set(
+                        "Access-Control-Allow-Methods",
+                        "GET, POST, PUT, DELETE, OPTIONS"
+                );
 
-        exchange.getResponseHeaders().set(
-                "Content-Type",
-                "application/json; charset=UTF-8"
-        );
+
+        exchange
+                .getResponseHeaders()
+                .set(
+                        "Access-Control-Allow-Headers",
+                        "Content-Type"
+                );
+
+
+        exchange
+                .getResponseHeaders()
+                .set(
+                        "Content-Type",
+                        "application/json; charset=UTF-8"
+                );
     }
 
-    // =========================================================
-    // SEND RESPONSE
-    // =========================================================
+
+    /* =========================================================
+       SEND RESPONSE
+    ========================================================= */
 
     private void sendResponse(
             HttpExchange exchange,
             int statusCode,
-            String response) throws IOException {
+            String response)
+            throws IOException {
 
         byte[] bytes =
                 response.getBytes(
                         StandardCharsets.UTF_8
                 );
 
+
         exchange.sendResponseHeaders(
                 statusCode,
                 bytes.length
         );
 
-        exchange.getResponseBody().write(bytes);
 
-        exchange.getResponseBody().close();
+        exchange
+                .getResponseBody()
+                .write(bytes);
+
+
+        exchange
+                .getResponseBody()
+                .close();
     }
 
-    // =========================================================
-    // ESCAPE JSON
-    // =========================================================
+
+    /* =========================================================
+       ESCAPE JSON
+    ========================================================= */
 
     private String escape(
             String value) {
 
-        if (value == null) {
+        if (
+                value == null
+        ) {
+
             return "";
         }
 
+
         return value
-                .replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r");
+                .replace(
+                        "\\",
+                        "\\\\"
+                )
+                .replace(
+                        "\"",
+                        "\\\""
+                )
+                .replace(
+                        "\n",
+                        "\\n"
+                )
+                .replace(
+                        "\r",
+                        "\\r"
+                );
     }
 }
